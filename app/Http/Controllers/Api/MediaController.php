@@ -37,40 +37,14 @@ class MediaController extends Controller
             $filename = Str::uuid()->toString() . '.' . $extension;
             $path = "{$folder}/{$filename}";
 
-            // Get file contents
-            $filePath = $file->getRealPath();
-            if (!file_exists($filePath)) {
-                Log::error('File does not exist', ['path' => $filePath]);
-                return response()->json([
-                    'message' => 'The file failed to upload.',
-                    'errors' => ['file' => ['File not found on server.']],
-                ], 422);
-            }
+            // Use Laravel's native file streaming to upload directly to S3 (memory efficient)
+            $uploadedPath = $file->storeAs(
+                $folder, 
+                $filename, 
+                ['disk' => 's3', 'visibility' => 'public']
+            );
 
-            $fileContents = file_get_contents($filePath);
-            if ($fileContents === false) {
-                Log::error('Could not read file contents', ['path' => $filePath]);
-                return response()->json([
-                    'message' => 'The file failed to upload.',
-                    'errors' => ['file' => ['Could not read file contents.']],
-                ], 422);
-            }
-
-            // Log S3 upload attempt
-            Log::info('Attempting S3 upload', [
-                'path' => $path,
-                'size' => strlen($fileContents),
-                'mime_type' => $file->getMimeType(),
-                'bucket' => config('filesystems.disks.s3.bucket'),
-                'region' => config('filesystems.disks.s3.region'),
-            ]);
-
-            $uploaded = Storage::disk('s3')->put($path, $fileContents, [
-                'visibility' => 'public',
-                'ContentType' => $file->getMimeType(),
-            ]);
-
-            if (!$uploaded) {
+            if (!$uploadedPath) {
                 Log::error('S3 upload returned false', [
                     'path' => $path,
                     'file_size' => $file->getSize(),
@@ -81,7 +55,7 @@ class MediaController extends Controller
                 ], 422);
             }
 
-            Log::info('File uploaded successfully to S3', ['path' => $path]);
+            Log::info('File uploaded successfully to S3', ['path' => $uploadedPath]);
 
             return response()->json([
                 'message' => 'Media uploaded successfully.',
