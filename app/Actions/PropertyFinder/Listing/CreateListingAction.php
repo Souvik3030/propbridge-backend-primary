@@ -95,6 +95,7 @@ class CreateListingAction
 
             // PF location
             'location_id'      => $data['location_id'],
+            'reference'        => $data['reference'] ?? null,
 
             // Emirate
             'emirate'          => $data['emirate'] ?? $this->resolveEmirateKey($data['emirate_id'] ?? 0),
@@ -106,6 +107,7 @@ class CreateListingAction
             'license_number'   => $company->license_number,
             'building_name'    => $data['building_name'] ?? null,
             'dld_permit_number' => $data['dld_permit_number'] ?? null,
+            'advertisement_number' => $data['advertisement_number'] ?? null,
 
             // Classification
             'listing_type'     => $data['listing_type'],
@@ -119,8 +121,10 @@ class CreateListingAction
             'pf_location_id'   => $data['location_id'],
 
             // Title & description
-            'title_en'         => $data['title'],
-            'description_en'   => $data['description'],
+            'title_en'         => $data['title_en'],
+            'title_ar'         => $data['title_ar'] ?? null,
+            'description_en'   => $data['description_en'],
+            'description_ar'   => $data['description_ar'] ?? null,
 
             // Pricing
             'price'            => $data['price'],
@@ -184,8 +188,11 @@ class CreateListingAction
             'property_type' => $data['property_type'],
             'price'        => (float) $data['price'],
             'size_sqft'    => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
-            'title'        => $data['title'],
-            'description'  => $data['description'],
+            'title'        => $data['title_en'],
+            'title_ar'     => $data['title_ar'] ?? null,
+            'description'  => $data['description_en'],
+            'description_ar'=> $data['description_ar'] ?? null,
+            'reference'    => $data['reference'] ?? null,
             'images'       => $data['images'],
         ];
 
@@ -193,7 +200,7 @@ class CreateListingAction
         $optionalFields = [
             'bedrooms', 'bathrooms', 'furnished', 'floor_number', 'parking',
             'rent_frequency', 'cheques', 'available_from', 'permit_number',
-            'dld_permit_number', 'building_name', 'ownership_type',
+            'dld_permit_number', 'building_name', 'ownership_type', 'advertisement_number',
             'developer_name', 'project_name', 'completion_date', 'payment_plan',
             'plot_size_sqft', 'number_of_floors', 'hotel_name',
             'zoning_type', 'fitted', 'virtual_tour', 'floor_plan',

@@ -53,10 +53,14 @@ class PropertyFinderListingController extends Controller
         StoreListingRequest $request,
         CreateListingAction $action
     ): JsonResponse {
+        $validated = $request->validated();
+        $agent = \App\Models\User::where('company_id', $request->user()->company_id)
+            ->findOrFail($validated['agent_id']);
+
         $listing = $action->execute(
-            $request->validated(),
+            $validated,
             $request->user()->company,
-            $request->user()
+            $agent
         );
 
         return response()->json([

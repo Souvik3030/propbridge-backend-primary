@@ -38,8 +38,17 @@ class StoreListingRequest extends FormRequest
 
             // ── Core required fields ──────────────────────────────────────────
 
-            // agent_id: PF agent ID from GET /agents
-            'agent_id'      => ['required', 'integer', 'min:1'],
+            // reference: User's custom CRM reference
+            'reference'     => ['nullable', 'string', 'max:100'],
+
+            // agent_id: Local user UUID representing the owner/agent
+            'agent_id'      => [
+                'required', 
+                'uuid', 
+                Rule::exists('users', 'id')->where(function ($query) {
+                    return $query->where('company_id', $this->user()->company_id);
+                })
+            ],
 
             // location_id: PF location ID from GET /locations
             'location_id'   => ['required', 'integer', 'min:1'],
@@ -69,10 +78,12 @@ class StoreListingRequest extends FormRequest
             'size_sqft'     => ['required', 'numeric', 'min:1'],
 
             // title: 10-150 chars per PF API docs
-            'title'         => ['required', 'string', 'min:10', 'max:150'],
+            'title_en'      => ['required', 'string', 'min:10', 'max:150'],
+            'title_ar'      => ['nullable', 'string', 'min:10', 'max:150'],
 
             // description: min 50 chars per PF API docs
-            'description'   => ['required', 'string', 'min:50'],
+            'description_en'=> ['required', 'string', 'min:50'],
+            'description_ar'=> ['nullable', 'string', 'min:50'],
 
             // images: at least 1, max 30 per PF API docs
             'images'        => ['required', 'array', 'min:1', 'max:30'],
@@ -85,6 +96,11 @@ class StoreListingRequest extends FormRequest
                 Rule::requiredIf($needsPermit),
                 'nullable', 'string', 'max:100',
             ],
+            
+            // permit_license_number & permit_id (from compliance API)
+            'permit_license_number' => ['nullable', 'string', 'max:100'],
+            'permit_id'             => ['nullable', 'string', 'max:100'],
+            'advertisement_number'  => ['nullable', 'string', 'max:100'],
 
             // building_name: required for Dubai(1) and Abu Dhabi(2)
             'building_name' => [
@@ -192,7 +208,7 @@ class StoreListingRequest extends FormRequest
 
             // project_status (optional, useful for off_plan)
             'project_status'  => ['nullable', Rule::in([
-                'off_plan', 'off_plan_primary', 'completed', 'completed_primary',
+                'off_plan', 'off_plan_primary', 'completed', 'completed_primary', 'off_plan_under_construction'
             ])],
         ];
     }
@@ -205,7 +221,9 @@ class StoreListingRequest extends FormRequest
             'emirate_id.in'       => 'Invalid emirate ID. Must be one of: 1 (Dubai), 2 (Abu Dhabi), 3 (Sharjah), 4 (Ajman), 5 (RAK), 6 (Fujairah), 7 (UAQ).',
 
             // Core PF fields
-            'agent_id.required'    => 'Agent ID is required. Fetch agents from GET /propertyfinder/agents.',
+            'agent_id.required'    => 'Agent is required. Please select a valid user.',
+            'agent_id.uuid'        => 'Invalid agent selection.',
+            'agent_id.exists'      => 'The selected agent is not valid or does not belong to your company.',
             'location_id.required' => 'Location ID is required. Fetch locations from GET /propertyfinder/locations.',
             'listing_type.required' => 'Listing type is required: sale or rent.',
             'property_type.required' => 'Property type is required (apartment, villa, office, etc.).',
@@ -215,9 +233,9 @@ class StoreListingRequest extends FormRequest
             'size_sqft.min'       => 'Size must be greater than 0 sq ft.',
 
             // Content
-            'title.min'           => 'Title must be at least 10 characters.',
-            'title.max'           => 'Title must not exceed 150 characters.',
-            'description.min'     => 'Description must be at least 50 characters.',
+            'title_en.min'        => 'Title (English) must be at least 10 characters.',
+            'title_en.max'        => 'Title (English) must not exceed 150 characters.',
+            'description_en.min'  => 'Description (English) must be at least 50 characters.',
             'images.required'     => 'At least 1 image URL is required.',
             'images.min'          => 'At least 1 image is required for a listing.',
             'images.max'          => 'Maximum 30 images allowed.',
