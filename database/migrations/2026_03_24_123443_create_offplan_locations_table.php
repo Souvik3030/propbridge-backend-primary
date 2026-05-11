@@ -21,7 +21,9 @@ return new class extends Migration
 
             $table->decimal('lat', 10, 7)->nullable();
             $table->decimal('lng', 10, 7)->nullable();
-            $table->fullText(['city', 'community'], 'locations_fulltext_index');
+            if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+                $table->fullText(['city', 'community'], 'locations_fulltext_index');
+            }
 
             $table->timestamps();
         });
