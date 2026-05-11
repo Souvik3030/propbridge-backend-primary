@@ -4,38 +4,41 @@ declare(strict_types=1);
 
 namespace App\Actions\PropertyFinder\Listing;
 
-use App\Models\PropertyFinderListing;
+use App\Actions\PropertyFinder\Compliance\LogComplianceCheckAction;
 use App\Models\Company;
+use App\Models\PropertyFinderListing;
 use App\Models\User;
 use App\Services\PropertyFinderApiClient;
-use App\Actions\PropertyFinder\Compliance\LogComplianceCheckAction;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Create a Property Finder listing.
- *
- * CORRECT WORKFLOW (per PF API v2 docs):
- *  1. Validate dependent fields locally (section 4a/4b/4c)
- *  2. Create local draft record in DB
- *  3. POST /listings to PF API → get pf_id, reference
- *  4. Save pf_id, reference, status=draft to DB
- *  5. Caller should then run GET /listings/{pf_id}/compliance
+ * Create a new PropertyFinder listing.
+ * 
+ * Flow:
+ * 1. Local validation (ValidateDependentFieldsAction)
+ * 2. Create local record in 'draft' status
+ * 3. Submit to PF API Atlas v2 (POST /listings)
+ * 4. Update local record with PF response (pf_id, status)
  */
 class CreateListingAction
 {
     public function __construct(
         private ValidateDependentFieldsAction $validateDependentFields,
         private PropertyFinderApiClient $client,
-        private LogComplianceCheckAction $logComplianceAction
+        private LogComplianceCheckAction $logCompliance
     ) {}
 
     /**
-     * Create a listing: validate → save local draft → POST to PF API.
+     * Execute the listing creation flow.
+     * 
+     * @param array $data Input data from StoreListingRequest
+     * @param Company $company The company owning the listing
+     * @param User|null $agent The agent assigned to the listing
      */
     public function execute(array $data, Company $company, ?User $agent): PropertyFinderListing
     {
-        // Step 1: Validate all dependent fields locally before touching PF API
+        // Step 1: Pre-validation of dependent fields
         $this->validateDependentFields->execute($data);
 
         return DB::transaction(function () use ($data, $company, $agent) {
@@ -47,18 +50,23 @@ class CreateListingAction
 
             // Step 3: Submit to PF API — POST /listings
             try {
+                if (isset($data['images'])) {
+                    $data['images'] = $this->uploadImagesIfFiles($data['images']);
+                    $listing->update(['images' => $data['images']]);
+                }
+                
                 $payload  = $this->buildPfPayload($data, $agent);
                 $pfData   = $this->client->post($company, 'listings', $payload);
 
-                // Step 4: Save PF identifiers returned by the API
+                // Step 4: Map PF response back to local record
                 $listing->update([
-                    'pf_id'          => $pfData['listing_id'] ?? $pfData['id'] ?? null,
-                    'pf_reference'   => $pfData['reference'] ?? null,
-                    'pf_listing_url' => $pfData['listing_url'] ?? null,
-                    'status'         => PropertyFinderListing::STATUS_DRAFT,
+                    'pf_id'            => $pfData['id'] ?? null,
+                    'pf_reference'     => $pfData['reference'] ?? null,
+                    'status'           => $pfData['status'] ?? PropertyFinderListing::STATUS_DRAFT,
+                    'validation_diffs' => null, // Clear any previous errors
                 ]);
 
-                Log::info('PropertyFinder listing created', [
+                Log::info('PropertyFinder listing created and synced', [
                     'listing_id'   => $listing->id,
                     'pf_id'        => $listing->pf_id,
                     'pf_reference' => $listing->pf_reference,
@@ -220,7 +228,7 @@ class CreateListingAction
             'developer_name', 'project_name', 'completion_date', 'payment_plan',
             'plot_size_sqft', 'number_of_floors', 'hotel_name',
             'zoning_type', 'fitted', 'virtual_tour', 'floor_plan',
-            'price_on_request', 'amenities',
+            'amenities',
         ];
 
         foreach ($optionalFields as $field) {
@@ -228,6 +236,9 @@ class CreateListingAction
                 // PF API expects bedrooms and bathrooms as strings
                 if (in_array($field, ['bedrooms', 'bathrooms'])) {
                     $payload[$field] = (string) $data[$field];
+                } elseif ($field === 'amenities' && is_string($data[$field])) {
+                    // Safety: convert comma-separated string to array if needed
+                    $payload[$field] = array_map('trim', explode(',', $data[$field]));
                 } else {
                     $payload[$field] = $data[$field];
                 }
@@ -245,5 +256,23 @@ class CreateListingAction
     private function resolveEmirateKey(int $emirateId): string
     {
         return config("propertyfinder.emirates.{$emirateId}.key", 'unknown');
+    }
+
+    /**
+     * Detect any UploadedFile objects in the images array and upload them to S3.
+     */
+    private function uploadImagesIfFiles(array $images): array
+    {
+        $urls = [];
+        foreach ($images as $image) {
+            if ($image instanceof \Illuminate\Http\UploadedFile) {
+                $filename = \Illuminate\Support\Str::uuid()->toString() . '.' . $image->getClientOriginalExtension();
+                $path = $image->storeAs('listings', $filename, ['disk' => 's3', 'visibility' => 'public']);
+                $urls[] = \Illuminate\Support\Facades\Storage::disk('s3')->url($path);
+            } else {
+                $urls[] = (string) $image;
+            }
+        }
+        return $urls;
     }
 }

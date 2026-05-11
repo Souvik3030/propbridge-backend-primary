@@ -84,7 +84,9 @@ class StoreListingRequest extends FormRequest
 
             // images: at least 1, max 30 per PF API docs
             'images'        => ['required', 'array', 'min:1', 'max:30'],
-            'images.*'      => ['string', 'url', 'max:2000'],
+            'images.*'      => ['required'], // Each item can be a URL string OR a file object
+            'images_files'  => ['nullable', 'array'],
+            'images_files.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
 
             // ── Section 4a: Emirate-based permit requirements ─────────────────
 

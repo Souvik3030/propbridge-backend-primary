@@ -118,10 +118,8 @@ class PropertyFinderApiClient
     private function baseRequest(): \Illuminate\Http\Client\PendingRequest
     {
         return Http::timeout($this->timeout)
-            ->withHeaders([
-                'Content-Type' => 'application/json',
-                'Accept'       => 'application/json',
-            ]);
+            ->asJson()
+            ->acceptJson();
     }
 
     /**

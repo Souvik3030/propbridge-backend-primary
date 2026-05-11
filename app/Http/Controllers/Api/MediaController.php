@@ -41,7 +41,7 @@ class MediaController extends Controller
             $uploadedPath = $file->storeAs(
                 $folder, 
                 $filename, 
-                ['disk' => 's3']
+                ['disk' => 's3', 'visibility' => 'public']
             );
 
             if (!$uploadedPath) {

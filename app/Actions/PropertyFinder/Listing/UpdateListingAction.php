@@ -39,6 +39,11 @@ class UpdateListingAction
 
         return DB::transaction(function () use ($listing, $data, $mergedData) {
 
+            // Process image uploads if files are provided
+            if (isset($data['images'])) {
+                $data['images'] = $this->uploadImagesIfFiles($data['images']);
+            }
+
             // Update local record (only the changed fields)
             $listing->update($this->filterUpdateData($data));
 
@@ -91,18 +96,56 @@ class UpdateListingAction
      */
     private function buildPfUpdatePayload(array $data): array
     {
-        // PF API accepted fields for PATCH /listings/{id}
-        $pfFieldMap = [
-            'price'            => 'price',
-            'description'      => 'description',
-            'title'            => 'title',
-            'agent_id'         => 'agent_id',  // Note: this is pf_agent_id on client side
+        $payload = [];
+
+        // 1. Handle price object if price is provided
+        if (isset($data['price'])) {
+            $payload['price'] = [
+                'value'    => (float) $data['price'],
+                'currency' => $data['price_currency'] ?? 'AED',
+            ];
+            if (isset($data['price_on_request'])) {
+                $payload['price']['on_request'] = (bool) $data['price_on_request'];
+            }
+        } elseif (isset($data['price_on_request'])) {
+             // Only price_on_request changed? Still need it inside price object
+             $payload['price'] = [
+                 'on_request' => (bool) $data['price_on_request']
+             ];
+        }
+
+        // 2. Handle title object
+        if (isset($data['title_en']) || isset($data['title'])) {
+            $payload['title'] = [
+                'en' => $data['title_en'] ?? $data['title']
+            ];
+            if (isset($data['title_ar'])) {
+                $payload['title']['ar'] = $data['title_ar'];
+            }
+        } elseif (isset($data['title_ar'])) {
+            $payload['title'] = ['ar' => $data['title_ar']];
+        }
+
+        // 3. Handle description object
+        if (isset($data['description_en']) || isset($data['description'])) {
+            $payload['description'] = [
+                'en' => $data['description_en'] ?? $data['description']
+            ];
+            if (isset($data['description_ar'])) {
+                $payload['description']['ar'] = $data['description_ar'];
+            }
+        } elseif (isset($data['description_ar'])) {
+            $payload['description'] = ['ar' => $data['description_ar']];
+        }
+
+        // 4. Handle all other fields
+        $otherFields = [
+            'agent_id'         => 'agent_id',
             'permit_number'    => 'permit_number',
-            'images'           => 'images',     // FULL REPLACE — caller must include all images
+            'images'           => 'images',
             'available_from'   => 'available_from',
-            'price_on_request' => 'price_on_request',
             'furnished'        => 'furnished',
-            'amenities'        => 'amenities',  // FULL REPLACE
+            'amenities'        => 'amenities',
             'rent_frequency'   => 'rent_frequency',
             'cheques'          => 'cheques',
             'floor_number'     => 'floor_number',
@@ -120,22 +163,28 @@ class UpdateListingAction
             'zoning_type'      => 'zoning_type',
             'fitted'           => 'fitted',
             'ownership_type'   => 'ownership_type',
+            'size'             => 'size_sqft',
         ];
 
-        $payload = [];
-
-        foreach ($pfFieldMap as $localKey => $pfKey) {
+        foreach ($otherFields as $localKey => $pfKey) {
             if (array_key_exists($localKey, $data)) {
-                $payload[$pfKey] = $data[$localKey];
+                $value = $data[$localKey];
+
+                // Cast to string if needed
+                if (in_array($pfKey, ['bedrooms', 'bathrooms'])) {
+                    $value = ($value !== null) ? (string) $value : null;
+                }
+
+                $payload[$pfKey] = $value;
             }
         }
 
-        // Special: pf_agent_id on the user maps to agent_id in PF API
+        // Special: pf_agent_id or agent_pf_id mapping
         if (isset($data['agent_pf_id'])) {
             $payload['agent_id'] = (int) $data['agent_pf_id'];
         }
 
-        return $payload;
+        return array_filter($payload, fn($v) => $v !== null);
     }
 
     /**
@@ -192,5 +241,23 @@ class UpdateListingAction
             'zoning_type'   => $listing->zoning_type,
             'fitted'        => $listing->fitted,
         ];
+    }
+
+    /**
+     * Detect any UploadedFile objects in the images array and upload them to S3.
+     */
+    private function uploadImagesIfFiles(array $images): array
+    {
+        $urls = [];
+        foreach ($images as $image) {
+            if ($image instanceof \Illuminate\Http\UploadedFile) {
+                $filename = \Illuminate\Support\Str::uuid()->toString() . '.' . $image->getClientOriginalExtension();
+                $path = $image->storeAs('listings', $filename, ['disk' => 's3', 'visibility' => 'public']);
+                $urls[] = \Illuminate\Support\Facades\Storage::disk('s3')->url($path);
+            } else {
+                $urls[] = (string) $image;
+            }
+        }
+        return $urls;
     }
 }
