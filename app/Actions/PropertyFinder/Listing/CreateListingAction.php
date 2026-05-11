@@ -121,9 +121,9 @@ class CreateListingAction
             'pf_location_id'   => $data['location_id'],
 
             // Title & description
-            'title_en'         => $data['title_en'],
+            'title_en'         => $data['title_en'] ?? $data['title'] ?? '',
             'title_ar'         => $data['title_ar'] ?? null,
-            'description_en'   => $data['description_en'],
+            'description_en'   => $data['description_en'] ?? $data['description'] ?? '',
             'description_ar'   => $data['description_ar'] ?? null,
 
             // Pricing
@@ -181,7 +181,7 @@ class CreateListingAction
     private function buildPfPayload(array $data, ?User $agent): array
     {
         $payload = [
-            'agent_id'     => $agent?->pf_agent_id ? (int) $agent->pf_agent_id : null,
+            'agent_id'     => isset($data['agent_id']) ? (int) $data['agent_id'] : ($agent?->pf_agent_id ? (int) $agent->pf_agent_id : null),
             'location_id'  => (int) $data['location_id'],
             'listing_type' => $data['listing_type'],
             'category'     => $data['category'],
@@ -192,10 +192,10 @@ class CreateListingAction
             ],
             'size_sqft'    => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
             'title'        => [
-                'en' => $data['title_en']
+                'en' => $data['title_en'] ?? $data['title'] ?? ''
             ],
             'description'  => [
-                'en' => $data['description_en']
+                'en' => $data['description_en'] ?? $data['description'] ?? ''
             ],
             'reference'    => $data['reference'] ?? null,
             'images'       => $data['images'],

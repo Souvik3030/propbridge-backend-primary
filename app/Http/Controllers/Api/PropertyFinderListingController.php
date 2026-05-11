@@ -54,8 +54,11 @@ class PropertyFinderListingController extends Controller
         CreateListingAction $action
     ): JsonResponse {
         $validated = $request->validated();
+        
+        // Find local user by pf_agent_id if integer provided, fallback to current user
         $agent = \App\Models\User::where('company_id', $request->user()->company_id)
-            ->findOrFail($validated['agent_id']);
+            ->where('pf_agent_id', $validated['agent_id'])
+            ->first() ?? $request->user();
 
         $listing = $action->execute(
             $validated,

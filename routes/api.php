@@ -166,3 +166,42 @@ Route::post('/webhooks/propertyfinder', [\App\Http\Controllers\Api\PropertyFinde
 
 // ■■■ MEDIA UPLOADS ■■■
 Route::middleware('auth:sanctum')->post('/media/upload', [\App\Http\Controllers\Api\MediaController::class, 'upload']);
+
+/**
+ * ==========================================
+ * S3 PUBLIC TEST UPLOAD ENDPOINT
+ * ==========================================
+ * Allows you to upload a test image directly to verify S3 without authentication.
+ */
+Route::post('/test-s3-upload', function (\Illuminate\Http\Request $request) {
+    try {
+        if (!$request->hasFile('file')) {
+            return response()->json(['error' => 'No file provided in the request. Use key "file".'], 400);
+        }
+
+        $file = $request->file('file');
+        $filename = 'test-s3-' . time() . '.' . $file->getClientOriginalExtension();
+        
+        $uploadedPath = $file->storeAs('test-media', $filename, ['disk' => 's3', 'visibility' => 'public']);
+        
+        if (!$uploadedPath) {
+            return response()->json(['error' => 'S3 upload failed silently.'], 500);
+        }
+        
+        $url = \Illuminate\Support\Facades\Storage::disk('s3')->url($uploadedPath);
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'Image successfully uploaded to S3!',
+            's3_path' => $uploadedPath,
+            'public_url' => $url,
+            'instruction' => 'Click the public_url. If it returns AccessDenied, your AWS Bucket Policy is blocking public read access and needs to be updated.'
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'error' => 'Exception occurred during S3 upload. Check credentials.',
+            'message' => $e->getMessage()
+        ], 500);
+    }
+});

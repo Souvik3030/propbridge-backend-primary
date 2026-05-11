@@ -41,14 +41,8 @@ class StoreListingRequest extends FormRequest
             // reference: User's custom CRM reference
             'reference'     => ['nullable', 'string', 'max:100'],
 
-            // agent_id: Local user UUID representing the owner/agent
-            'agent_id'      => [
-                'required', 
-                'uuid', 
-                Rule::exists('users', 'id')->where(function ($query) {
-                    return $query->where('company_id', $this->user()->company_id);
-                })
-            ],
+            // agent_id: PF agent ID integer (sent by frontend)
+            'agent_id'      => ['required', 'integer', 'min:1'],
 
             // location_id: PF location ID from GET /locations
             'location_id'   => ['required', 'integer', 'min:1'],
@@ -79,11 +73,13 @@ class StoreListingRequest extends FormRequest
             'size_sqft'     => ['required', 'numeric', 'min:1'],
 
             // title: 10-150 chars per PF API docs
-            'title_en'      => ['required', 'string', 'min:10', 'max:150'],
+            'title_en'      => ['required_without:title', 'string', 'min:10', 'max:150'],
+            'title'         => ['required_without:title_en', 'string', 'min:10', 'max:150'],
             'title_ar'      => ['nullable', 'string', 'min:10', 'max:150'],
 
             // description: min 50 chars per PF API docs
-            'description_en'=> ['required', 'string', 'min:50'],
+            'description_en'=> ['required_without:description', 'string', 'min:50'],
+            'description'   => ['required_without:description_en', 'string', 'min:50'],
             'description_ar'=> ['nullable', 'string', 'min:50'],
 
             // images: at least 1, max 30 per PF API docs
@@ -222,9 +218,7 @@ class StoreListingRequest extends FormRequest
             'emirate_id.in'       => 'Invalid emirate ID. Must be one of: 1 (Dubai), 2 (Abu Dhabi), 3 (Sharjah), 4 (Ajman), 5 (RAK), 6 (Fujairah), 7 (UAQ).',
 
             // Core PF fields
-            'agent_id.required'    => 'Agent is required. Please select a valid user.',
-            'agent_id.uuid'        => 'Invalid agent selection.',
-            'agent_id.exists'      => 'The selected agent is not valid or does not belong to your company.',
+            'agent_id.required'    => 'Agent ID is required. Fetch agents from GET /propertyfinder/agents.',
             'location_id.required' => 'Location ID is required. Fetch locations from GET /propertyfinder/locations.',
             'listing_type.required' => 'Listing type is required: sale or rent.',
             'property_type.required' => 'Property type is required (apartment, villa, office, etc.).',
