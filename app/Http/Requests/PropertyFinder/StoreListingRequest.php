@@ -73,6 +73,7 @@ class StoreListingRequest extends FormRequest
 
             // price: required for all listings, must be > 0
             'price'         => ['required', 'numeric', 'min:0.01', 'max:999999999.99'],
+            'price_currency'=> ['nullable', 'string', 'size:3'],
 
             // size_sqft: required for all listings per PF docs
             'size_sqft'     => ['required', 'numeric', 'min:1'],

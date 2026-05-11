@@ -186,15 +186,31 @@ class CreateListingAction
             'listing_type' => $data['listing_type'],
             'category'     => $data['category'],
             'property_type' => $data['property_type'],
-            'price'        => (float) $data['price'],
+            'price'        => [
+                'value' => (float) $data['price'],
+                'currency' => $data['price_currency'] ?? 'AED',
+            ],
             'size_sqft'    => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
-            'title'        => $data['title_en'],
-            'title_ar'     => $data['title_ar'] ?? null,
-            'description'  => $data['description_en'],
-            'description_ar'=> $data['description_ar'] ?? null,
+            'title'        => [
+                'en' => $data['title_en']
+            ],
+            'description'  => [
+                'en' => $data['description_en']
+            ],
             'reference'    => $data['reference'] ?? null,
             'images'       => $data['images'],
         ];
+
+        if (!empty($data['title_ar'])) {
+            $payload['title']['ar'] = $data['title_ar'];
+        }
+        if (!empty($data['description_ar'])) {
+            $payload['description']['ar'] = $data['description_ar'];
+        }
+        
+        if (isset($data['price_on_request'])) {
+            $payload['price']['on_request'] = (bool) $data['price_on_request'];
+        }
 
         // Conditional fields — only include if present
         $optionalFields = [
@@ -209,7 +225,12 @@ class CreateListingAction
 
         foreach ($optionalFields as $field) {
             if (isset($data[$field]) && $data[$field] !== null && $data[$field] !== '') {
-                $payload[$field] = $data[$field];
+                // PF API expects bedrooms and bathrooms as strings
+                if (in_array($field, ['bedrooms', 'bathrooms'])) {
+                    $payload[$field] = (string) $data[$field];
+                } else {
+                    $payload[$field] = $data[$field];
+                }
             }
         }
 
