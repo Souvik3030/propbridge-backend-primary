@@ -267,7 +267,7 @@ class CreateListingAction
         foreach ($images as $image) {
             if ($image instanceof \Illuminate\Http\UploadedFile) {
                 $filename = \Illuminate\Support\Str::uuid()->toString() . '.' . $image->getClientOriginalExtension();
-                $path = $image->storeAs('listings', $filename, ['disk' => 's3', 'visibility' => 'public']);
+                $path = $image->storeAs('listings', $filename, ['disk' => 's3']);
                 $urls[] = \Illuminate\Support\Facades\Storage::disk('s3')->url($path);
             } else {
                 $urls[] = (string) $image;
