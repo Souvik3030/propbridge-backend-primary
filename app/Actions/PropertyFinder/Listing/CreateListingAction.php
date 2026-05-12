@@ -14,12 +14,6 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Create a new PropertyFinder listing.
- * 
- * Flow:
- * 1. Local validation (ValidateDependentFieldsAction)
- * 2. Create local record in 'draft' status
- * 3. Submit to PF API Atlas v2 (POST /listings)
- * 4. Update local record with PF response (pf_id, status)
  */
 class CreateListingAction
 {
@@ -200,54 +194,43 @@ class CreateListingAction
      */
     private function buildPfPayload(array $data, ?User $agent): array
     {
-        $pfAgentId = (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0));
-        $purpose   = ($data['listing_type'] === 'rent') ? ($data['rent_frequency'] ?? 'yearly') : 'sale';
-
         $payload = [
-            'reference'    => $data['reference'] ?? null,
-            'agent_id'     => $pfAgentId,
-            'agent'        => ['id' => $pfAgentId],
-            'assignedTo'   => ['id' => $pfAgentId], // Atlas v3 agent field
-            'createdBy'    => ['id' => $pfAgentId], // Atlas v3 createdBy
+            'agent_id'     => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
+            'agent'        => ['id' => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0))], // New agent object
             'location_id'  => (int) $data['location_id'],
-            'location'     => ['id' => (int) $data['location_id']],
-            'listing_type' => $data['listing_type'],
-            'purpose'      => $data['listing_type'],
-            'type'         => $data['property_type'],
+            'location'     => ['id' => (int) $data['location_id']], // Standard location object
+            'listing_type' => $data['listing_type'], // sale | rent
+            'purpose'      => $data['listing_type'], // Redundant purpose variant
+            'type'         => $data['property_type'], // apartment | villa | etc.
             'category'     => $data['category'],
-            'uaeEmirate'   => $data['emirate'] ?? $this->resolveEmirateKey($data['emirate_id'] ?? 0), // Atlas v3 emirate slug
             'price'        => [
-                'amount'   => (float) $data['price'],
+                'amount' => (float) $data['price'], // amount instead of value
                 'currency' => $data['price_currency'] ?? 'AED',
-                'type'     => $purpose,
-                'amounts'  => [
-                    $purpose => (float) $data['price']
-                ],
             ],
-            'price_value'    => (float) $data['price'],
+            // Redundant price variants
+            'price_value' => (float) $data['price'],
             'price_currency' => $data['price_currency'] ?? 'AED',
             
-            'size'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
+            'size'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0), // Flat numeric value
             'size_sqft'    => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
-            'area'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
+            'area'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0), // Redundant area variant
             'title'        => [
                 'en' => $data['title_en'] ?? $data['title'] ?? ''
             ],
             'description'  => [
                 'en' => $data['description_en'] ?? $data['description'] ?? ''
             ],
+            'reference'    => $data['reference'] ?? null,
             'images'       => $data['images'],
-            'media'        => [
-                'images' => array_map(fn($url) => [
-                    'original' => ['url' => $url],
-                    'caption'  => ''
-                ], (array) $data['images'])
-            ], // Atlas v3 media structure
             'created_by'   => [
-                'id'   => $pfAgentId,
+                'id'   => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
                 'type' => 'agent',
             ],
-            'created_by_id' => $pfAgentId,
+            // Redundant variants for compatibility
+            'createdBy' => [
+                'id' => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
+            ],
+            'created_by_id' => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
         ];
 
         if (!empty($data['title_ar'])) {
@@ -289,17 +272,8 @@ class CreateListingAction
             }
         }
 
-        // Optional aliases for v3
-        if (!empty($data['furnished'])) {
-            $payload['furnishingType'] = $data['furnished'];
-        }
-        if (!empty($data['fitted'])) {
-            $payload['finishingType'] = ($data['fitted'] === 'yes') ? 'fully-finished' : (($data['fitted'] === 'no') ? 'unfurnished' : 'semi-finished');
-        }
-
         // private_pool is boolean — include if true
         if (!empty($data['private_pool'])) {
-            $payload['hasPool'] = (bool) $data['private_pool'];
             $payload['private_pool'] = (bool) $data['private_pool'];
         }
 
