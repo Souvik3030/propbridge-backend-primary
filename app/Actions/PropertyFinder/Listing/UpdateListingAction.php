@@ -183,10 +183,7 @@ class UpdateListingAction
                     $payload['purpose'] = $value;
                 }
                 if ($pfKey === 'size_sqft') {
-                    $payload['size'] = [
-                        'value' => (float) $value,
-                        'unit'  => 'sqft'
-                    ];
+                    $payload['size'] = (float) $value;
                     $payload['area'] = (float) $value;
                 }
 

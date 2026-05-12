@@ -217,10 +217,7 @@ class CreateListingAction
             'price_value' => (float) $data['price'],
             'price_currency' => $data['price_currency'] ?? 'AED',
             
-            'size'         => [
-                'value' => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
-                'unit'  => 'sqft',
-            ], // Standard size object
+            'size'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0), // Flat numeric value
             'size_sqft'    => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
             'area'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0), // Redundant area variant
             'title'        => [
