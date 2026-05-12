@@ -203,7 +203,7 @@ class StoreListingRequest extends FormRequest
             'floor_plan'      => ['nullable', 'url', 'max:2000'],
             'price_on_request' => ['nullable', 'boolean'],
             'amenities'       => ['nullable', 'array'],
-            'amenities.*'     => ['string', 'max:100'],
+            'amenities.*'     => ['string', Rule::in(config('propertyfinder.amenities', []))],
 
             // project_status (optional, useful for off_plan)
             'project_status'  => ['nullable', Rule::in([

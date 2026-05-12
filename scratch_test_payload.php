@@ -22,7 +22,8 @@ $data = [
     'bathrooms' => 1,
     'images' => ['https://example.com/img.jpg'],
     'reference' => 'VW-123',
-    'emirate_id' => 3
+    'emirate_id' => 3,
+    'amenities' => ['Central AC', 'Built-in Wardrobes', 'private-gym', 'Maids Room']
 ];
 
 // Call buildPfPayload directly via Reflection

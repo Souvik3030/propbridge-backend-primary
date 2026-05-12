@@ -233,4 +233,50 @@ return [
         'BEDROOMS_MISSING'    => 'Residential listing has no bedroom count.',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Property Finder Amenities (Slugs)
+    |--------------------------------------------------------------------------
+    | Valid values for the 'amenities' array field.
+    |--------------------------------------------------------------------------
+    */
+    'amenities' => [
+        'central-ac',
+        'built-in-wardrobes',
+        'kitchen-appliances',
+        'security',
+        'concierge',
+        'private-gym',
+        'shared-gym',
+        'private-jacuzzi',
+        'shared-spa',
+        'covered-parking',
+        'maids-room',
+        'barbecue-area',
+        'shared-pool',
+        'childrens-pool',
+        'private-garden',
+        'private-pool',
+        'view-of-water',
+        'walk-in-closet',
+        'lobby-in-building',
+        'electricity',
+        'waters',
+        'sanitation',
+        'no-services',
+        'fixed-phone',
+        'fibre-optics',
+        'flood-drainage',
+        'balcony',
+        'networked',
+        'view-of-landmark',
+        'dining-in-building',
+        'conference-room',
+        'study',
+        'maid-service',
+        'childrens-play-area',
+        'pets-allowed',
+        'vastu-compliant',
+    ],
+
 ];

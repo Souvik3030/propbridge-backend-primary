@@ -236,9 +236,12 @@ class CreateListingAction
                 // PF API expects bedrooms and bathrooms as strings
                 if (in_array($field, ['bedrooms', 'bathrooms'])) {
                     $payload[$field] = (string) $data[$field];
-                } elseif ($field === 'amenities' && is_string($data[$field])) {
-                    // Safety: convert comma-separated string to array if needed
-                    $payload[$field] = array_map('trim', explode(',', $data[$field]));
+                } elseif ($field === 'amenities') {
+                    $amenities = is_string($data[$field]) ? explode(',', $data[$field]) : $data[$field];
+                    $payload[$field] = array_values(array_unique(array_map(
+                        fn($v) => \Illuminate\Support\Str::slug(trim($v)),
+                        (array) $amenities
+                    )));
                 } else {
                     $payload[$field] = $data[$field];
                 }

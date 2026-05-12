@@ -172,9 +172,16 @@ class UpdateListingAction
             if (array_key_exists($localKey, $data)) {
                 $value = $data[$localKey];
 
-                // Cast to string if needed
                 if (in_array($pfKey, ['bedrooms', 'bathrooms'])) {
                     $value = ($value !== null) ? (string) $value : null;
+                }
+
+                if ($pfKey === 'amenities' && $value !== null) {
+                    $amenities = is_string($value) ? explode(',', $value) : $value;
+                    $value = array_values(array_unique(array_map(
+                        fn($v) => \Illuminate\Support\Str::slug(trim($v)),
+                        (array) $amenities
+                    )));
                 }
 
                 $payload[$pfKey] = $value;
