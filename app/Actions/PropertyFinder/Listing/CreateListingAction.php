@@ -192,7 +192,7 @@ class CreateListingAction
      * Build the payload for PF API POST /listings.
      * Field names match the PF API v2 spec exactly.
      */
-    private function buildPfPayload(array $data, ?User $agent): array
+   private function buildPfPayload(array $data, ?User $agent): array
     {
         $payload = [
             'agent_id'     => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
