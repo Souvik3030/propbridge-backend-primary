@@ -42,6 +42,12 @@ class StoreListingRequest extends FormRequest
             $this->merge(['location_id' => $this->input('locationId')]);
         }
 
+        if ($this->has('location.name')) {
+            $this->merge(['location_name' => $this->input('location.name')]);
+        } elseif ($this->has('locationName')) {
+            $this->merge(['location_name' => $this->input('locationName')]);
+        }
+
         // Classification
         if ($this->has('type') && !$this->has('property_type')) {
             $this->merge(['property_type' => $this->input('type')]);
