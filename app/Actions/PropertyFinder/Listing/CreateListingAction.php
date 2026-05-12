@@ -191,9 +191,9 @@ class CreateListingAction
         $payload = [
             'agent_id'     => isset($data['agent_id']) ? (int) $data['agent_id'] : ($agent?->pf_agent_id ? (int) $agent->pf_agent_id : null),
             'location_id'  => (int) $data['location_id'],
-            'type'         => $data['listing_type'],
+            'listing_type' => $data['listing_type'], // sale | rent
+            'type'         => $data['property_type'], // apartment | villa | etc.
             'category'     => $data['category'],
-            'property_type' => $data['property_type'],
             'price'        => [
                 'value' => (float) $data['price'],
                 'currency' => $data['price_currency'] ?? 'AED',

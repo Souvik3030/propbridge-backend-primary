@@ -163,8 +163,8 @@ class UpdateListingAction
             'zoning_type'      => 'zoning_type',
             'fitted'           => 'fitted',
             'ownership_type'   => 'ownership_type',
-            'listing_type'     => 'type',
-            'property_type'    => 'property_type',
+            'listing_type'     => 'listing_type',
+            'property_type'    => 'type',
             'size'             => 'size_sqft',
         ];
 
