@@ -23,6 +23,17 @@ class StoreListingRequest extends FormRequest
         return $this->user()->can('create', PropertyFinderListing::class);
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('amenities') && is_array($this->amenities)) {
+            $this->merge([
+                'amenities' => array_map(function($v) {
+                    return is_string($v) ? str_replace('_', '-', $v) : $v;
+                }, $this->amenities)
+            ]);
+        }
+    }
+
     public function rules(): array
     {
         $listingType  = $this->input('listing_type');
