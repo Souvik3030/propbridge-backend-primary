@@ -56,6 +56,18 @@ class CreateListingAction
                 }
                 
                 $payload  = $this->buildPfPayload($data, $agent);
+
+                // TEMPORARY: Log full payload for debugging
+                Log::info('PropertyFinder listing creation payload', [
+                    'listing_id' => $listing->id,
+                    'payload'    => $payload
+                ]);
+
+                // Safety: Validate created_by.id is present
+                if (empty($payload['created_by']['id'])) {
+                    throw new \Exception('Missing required field: created_by.id (PF User/Agent ID)');
+                }
+
                 $pfData   = $this->client->post($company, 'listings', $payload);
 
                 // Step 4: Map PF response back to local record
@@ -207,6 +219,9 @@ class CreateListingAction
             ],
             'reference'    => $data['reference'] ?? null,
             'images'       => $data['images'],
+            'created_by'   => [
+                'id' => isset($data['agent_id']) ? (int) $data['agent_id'] : ($agent?->pf_agent_id ? (int) $agent->pf_agent_id : null)
+            ],
         ];
 
         if (!empty($data['title_ar'])) {
