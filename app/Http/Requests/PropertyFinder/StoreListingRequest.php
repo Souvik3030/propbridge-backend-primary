@@ -32,9 +32,14 @@ class StoreListingRequest extends FormRequest
         // Agent & Location
         if ($this->has('assignedTo.id')) {
             $this->merge(['agent_id' => $this->input('assignedTo.id')]);
+        } elseif ($this->has('agentId')) {
+            $this->merge(['agent_id' => $this->input('agentId')]);
         }
+        
         if ($this->has('location.id')) {
             $this->merge(['location_id' => $this->input('location.id')]);
+        } elseif ($this->has('locationId')) {
+            $this->merge(['location_id' => $this->input('locationId')]);
         }
 
         // Classification
@@ -47,8 +52,13 @@ class StoreListingRequest extends FormRequest
         if ($this->has('projectStatus')) {
             $this->merge(['project_status' => $this->input('projectStatus')]);
         }
+        
+        // Ownership Type (Required for Sale)
         if ($this->has('ownershipType')) {
             $this->merge(['ownership_type' => $this->input('ownershipType')]);
+        } elseif (!$this->has('ownership_type') && $this->input('price.type') === 'sale') {
+            // Safe default if missing for sale listings in Dubai
+            $this->merge(['ownership_type' => 'freehold']);
         }
 
         // Title & Description (Crucial: Replace the objects with strings to pass validation)
@@ -56,7 +66,7 @@ class StoreListingRequest extends FormRequest
             $titleEn = $this->input('title.en');
             $this->merge([
                 'title_en' => $titleEn,
-                'title'    => $titleEn, // Flatten 'title' from object to string
+                'title'    => $titleEn, 
             ]);
         }
         if ($this->has('title.ar')) {
@@ -67,7 +77,7 @@ class StoreListingRequest extends FormRequest
             $descEn = $this->input('description.en');
             $this->merge([
                 'description_en' => $descEn,
-                'description'    => $descEn, // Flatten 'description' from object to string
+                'description'    => $descEn, 
             ]);
         }
         if ($this->has('description.ar')) {
@@ -121,8 +131,11 @@ class StoreListingRequest extends FormRequest
                 $this->merge(['emirate_id' => $emirateMapping[$slug]]);
             }
         }
+        
         if ($this->has('buildingName')) {
             $this->merge(['building_name' => $this->input('buildingName')]);
+        } elseif (!$this->has('building_name') && $this->has('building')) {
+            $this->merge(['building_name' => $this->input('building')]);
         }
 
         // Media
@@ -133,14 +146,18 @@ class StoreListingRequest extends FormRequest
             $this->merge(['images' => array_filter($images)]);
         }
 
-        // Compliance
+        // Compliance & Permits
         if ($this->has('compliance')) {
             $this->merge([
-                'permit_number' => $this->input('compliance.listingAdvertisementNumber'),
+                'permit_number' => $this->input('compliance.listingAdvertisementNumber') ?? $this->input('compliance.permitNumber'),
                 'permit_type'   => $this->input('compliance.type'),
                 'license_number' => $this->input('compliance.issuingClientLicenseNumber'),
                 'advertisement_license_issuance_date' => $this->input('compliance.advertisementLicenseIssuanceDate'),
             ]);
+        }
+        // Fallback for permit number at root
+        if (!$this->has('permit_number') && $this->has('permitNumber')) {
+            $this->merge(['permit_number' => $this->input('permitNumber')]);
         }
 
         // Specs (Handle "studio" and "none" strings)
