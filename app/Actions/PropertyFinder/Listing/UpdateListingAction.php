@@ -100,9 +100,15 @@ class UpdateListingAction
 
         // 1. Handle price object if price is provided
         if (isset($data['price'])) {
+            $purpose = ($data['listing_type'] ?? 'sale') === 'rent' ? ($data['rent_frequency'] ?? 'yearly') : 'sale';
+            
             $payload['price'] = [
                 'amount'   => (float) $data['price'],
                 'currency' => $data['price_currency'] ?? 'AED',
+                'type'     => $purpose,
+                'amounts'  => [
+                    $purpose => (float) $data['price']
+                ],
             ];
             // Redundant variants
             $payload['price_value'] = (float) $data['price'];
@@ -209,8 +215,18 @@ class UpdateListingAction
                         'type' => 'agent',
                     ];
                     $payload['agent'] = ['id' => (int) $value];
+                    $payload['assignedTo'] = ['id' => (int) $value];
                     $payload['createdBy'] = ['id' => (int) $value];
                     $payload['created_by_id'] = (int) $value;
+                }
+                
+                if ($pfKey === 'images' && is_array($value)) {
+                    $payload['media'] = [
+                        'images' => array_map(fn($url) => [
+                            'original' => ['url' => $url],
+                            'caption'  => ''
+                        ], $value)
+                    ];
                 }
             }
         }

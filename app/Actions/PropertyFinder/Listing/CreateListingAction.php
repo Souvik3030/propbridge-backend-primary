@@ -200,43 +200,54 @@ class CreateListingAction
      */
     private function buildPfPayload(array $data, ?User $agent): array
     {
+        $pfAgentId = (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0));
+        $purpose   = ($data['listing_type'] === 'rent') ? ($data['rent_frequency'] ?? 'yearly') : 'sale';
+
         $payload = [
-            'agent_id'     => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
-            'agent'        => ['id' => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0))], // New agent object
+            'reference'    => $data['reference'] ?? null,
+            'agent_id'     => $pfAgentId,
+            'agent'        => ['id' => $pfAgentId],
+            'assignedTo'   => ['id' => $pfAgentId], // Atlas v3 agent field
+            'createdBy'    => ['id' => $pfAgentId], // Atlas v3 createdBy
             'location_id'  => (int) $data['location_id'],
-            'location'     => ['id' => (int) $data['location_id']], // Standard location object
-            'listing_type' => $data['listing_type'], // sale | rent
-            'purpose'      => $data['listing_type'], // Redundant purpose variant
-            'type'         => $data['property_type'], // apartment | villa | etc.
+            'location'     => ['id' => (int) $data['location_id']],
+            'listing_type' => $data['listing_type'],
+            'purpose'      => $data['listing_type'],
+            'type'         => $data['property_type'],
             'category'     => $data['category'],
+            'uaeEmirate'   => $data['emirate'] ?? $this->resolveEmirateKey($data['emirate_id'] ?? 0), // Atlas v3 emirate slug
             'price'        => [
-                'amount' => (float) $data['price'], // amount instead of value
+                'amount'   => (float) $data['price'],
                 'currency' => $data['price_currency'] ?? 'AED',
+                'type'     => $purpose,
+                'amounts'  => [
+                    $purpose => (float) $data['price']
+                ],
             ],
-            // Redundant price variants
-            'price_value' => (float) $data['price'],
+            'price_value'    => (float) $data['price'],
             'price_currency' => $data['price_currency'] ?? 'AED',
             
-            'size'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0), // Flat numeric value
+            'size'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
             'size_sqft'    => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
-            'area'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0), // Redundant area variant
+            'area'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
             'title'        => [
                 'en' => $data['title_en'] ?? $data['title'] ?? ''
             ],
             'description'  => [
                 'en' => $data['description_en'] ?? $data['description'] ?? ''
             ],
-            'reference'    => $data['reference'] ?? null,
             'images'       => $data['images'],
+            'media'        => [
+                'images' => array_map(fn($url) => [
+                    'original' => ['url' => $url],
+                    'caption'  => ''
+                ], (array) $data['images'])
+            ], // Atlas v3 media structure
             'created_by'   => [
-                'id'   => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
+                'id'   => $pfAgentId,
                 'type' => 'agent',
             ],
-            // Redundant variants for compatibility
-            'createdBy' => [
-                'id' => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
-            ],
-            'created_by_id' => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
+            'created_by_id' => $pfAgentId,
         ];
 
         if (!empty($data['title_ar'])) {
@@ -278,8 +289,17 @@ class CreateListingAction
             }
         }
 
+        // Optional aliases for v3
+        if (!empty($data['furnished'])) {
+            $payload['furnishingType'] = $data['furnished'];
+        }
+        if (!empty($data['fitted'])) {
+            $payload['finishingType'] = ($data['fitted'] === 'yes') ? 'fully-finished' : (($data['fitted'] === 'no') ? 'unfurnished' : 'semi-finished');
+        }
+
         // private_pool is boolean — include if true
         if (!empty($data['private_pool'])) {
+            $payload['hasPool'] = (bool) $data['private_pool'];
             $payload['private_pool'] = (bool) $data['private_pool'];
         }
 
