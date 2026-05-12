@@ -104,6 +104,10 @@ class UpdateListingAction
                 'value'    => (float) $data['price'],
                 'currency' => $data['price_currency'] ?? 'AED',
             ];
+            // Redundant variants
+            $payload['price_value'] = (float) $data['price'];
+            $payload['price_currency'] = $data['price_currency'] ?? 'AED';
+
             if (isset($data['price_on_request'])) {
                 $payload['price']['on_request'] = (bool) $data['price_on_request'];
             }
@@ -171,6 +175,17 @@ class UpdateListingAction
         foreach ($otherFields as $localKey => $pfKey) {
             if (array_key_exists($localKey, $data)) {
                 $value = $data[$localKey];
+
+                if ($pfKey === 'location_id') {
+                    $payload['location'] = ['id' => (int) $value];
+                }
+                if ($pfKey === 'listing_type') {
+                    $payload['purpose'] = $value;
+                }
+                if ($pfKey === 'size_sqft') {
+                    $payload['size'] = (float) $value;
+                    $payload['area'] = (float) $value;
+                }
 
                 if (in_array($pfKey, ['bedrooms', 'bathrooms'])) {
                     $value = ($value !== null) ? (string) $value : null;
