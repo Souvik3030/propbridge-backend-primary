@@ -42,22 +42,33 @@ class StoreListingRequest extends FormRequest
             $this->merge(['property_type' => $this->input('type')]);
         }
         if ($this->has('category')) {
-            // Ensure category is in snake_case if it comes as camelCase
             $this->merge(['category' => \Illuminate\Support\Str::snake($this->input('category'))]);
         }
         if ($this->has('projectStatus')) {
             $this->merge(['project_status' => $this->input('projectStatus')]);
         }
+        if ($this->has('ownershipType')) {
+            $this->merge(['ownership_type' => $this->input('ownershipType')]);
+        }
 
-        // Title & Description
+        // Title & Description (Crucial: Replace the objects with strings to pass validation)
         if ($this->has('title.en')) {
-            $this->merge(['title_en' => $this->input('title.en')]);
+            $titleEn = $this->input('title.en');
+            $this->merge([
+                'title_en' => $titleEn,
+                'title'    => $titleEn, // Flatten 'title' from object to string
+            ]);
         }
         if ($this->has('title.ar')) {
             $this->merge(['title_ar' => $this->input('title.ar')]);
         }
+        
         if ($this->has('description.en')) {
-            $this->merge(['description_en' => $this->input('description.en')]);
+            $descEn = $this->input('description.en');
+            $this->merge([
+                'description_en' => $descEn,
+                'description'    => $descEn, // Flatten 'description' from object to string
+            ]);
         }
         if ($this->has('description.ar')) {
             $this->merge(['description_ar' => $this->input('description.ar')]);
@@ -93,7 +104,7 @@ class StoreListingRequest extends FormRequest
             $this->merge(['size_sqft' => $this->input('builtUpArea') ?? $this->input('size')]);
         }
 
-        // Emirate Mapping
+        // Emirate & Building Mapping
         if ($this->has('uaeEmirate')) {
             $slug = \Illuminate\Support\Str::slug($this->input('uaeEmirate'));
             $emirateMapping = [
@@ -104,11 +115,14 @@ class StoreListingRequest extends FormRequest
                 'rak'               => 5,
                 'fujairah'          => 6,
                 'uaq'               => 7,
-                'northern-emirates' => 1, // Default or specific mapping
+                'northern-emirates' => 1,
             ];
             if (isset($emirateMapping[$slug])) {
                 $this->merge(['emirate_id' => $emirateMapping[$slug]]);
             }
+        }
+        if ($this->has('buildingName')) {
+            $this->merge(['building_name' => $this->input('buildingName')]);
         }
 
         // Media
