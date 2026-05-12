@@ -280,7 +280,7 @@ class CreateListingAction
     //     return array_filter($payload, fn($v) => $v !== null);
     // }
 
-/**
+    /**
      * Build the payload for PF API POST /listings.
      */
     private function buildPfPayload(array $data, ?User $agent): array
@@ -289,8 +289,7 @@ class CreateListingAction
         $pfAgentId = $agent ? (int) $agent->pf_agent_id : 0;
 
         $payload = [
-            // Standard agent assignment
-            'agent_id'     => $pfAgentId,
+            'agent_id'     => $pfAgentId, // Kept as standard fallback
             
             'location_id'  => (int) $data['location_id'],
             'listing_type' => $data['listing_type'], // sale | rent
@@ -312,6 +311,12 @@ class CreateListingAction
             ],
             'reference'    => $data['reference'] ?? null,
             'images'       => $data['images'],
+
+            // Re-added to pass your execute() safety check and correctly map to PF
+            'created_by'   => [
+                'id'   => $pfAgentId,
+                'type' => 'agent',
+            ],
         ];
 
         // Add Arabic translations if available
@@ -323,7 +328,7 @@ class CreateListingAction
         }
         
         if (isset($data['price_on_request'])) {
-            $payload['price_on_request'] = (bool) $data['price_on_request']; // Usually a flat boolean, not nested
+            $payload['price_on_request'] = (bool) $data['price_on_request'];
         }
 
         // Conditional fields — only include if present
@@ -360,7 +365,6 @@ class CreateListingAction
 
         return array_filter($payload, fn($v) => $v !== null);
     }
-    
     private function resolveEmirateKey(int $emirateId): string
     {
         return config("propertyfinder.emirates.{$emirateId}.key", 'unknown');
