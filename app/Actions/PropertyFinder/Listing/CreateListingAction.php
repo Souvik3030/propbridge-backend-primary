@@ -223,6 +223,11 @@ class CreateListingAction
                 'id'   => (string) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? '')),
                 'type' => 'agent',
             ],
+            // Redundant variants for compatibility
+            'createdBy' => [
+                'id' => (string) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? '')),
+            ],
+            'created_by_id' => (string) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? '')),
         ];
 
         if (!empty($data['title_ar'])) {

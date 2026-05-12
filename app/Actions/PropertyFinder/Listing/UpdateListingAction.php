@@ -185,6 +185,15 @@ class UpdateListingAction
                 }
 
                 $payload[$pfKey] = $value;
+
+                if ($pfKey === 'agent_id' && $value !== null) {
+                    $payload['created_by'] = [
+                        'id'   => (string) $value,
+                        'type' => 'agent',
+                    ];
+                    $payload['createdBy'] = ['id' => (string) $value];
+                    $payload['created_by_id'] = (string) $value;
+                }
             }
         }
 
