@@ -202,24 +202,27 @@ class CreateListingAction
     {
         $payload = [
             'agent_id'     => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
+            'agent'        => ['id' => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0))], // New agent object
             'location_id'  => (int) $data['location_id'],
-            'location'     => ['id' => (int) $data['location_id']], // Redundant location variant
+            'location'     => ['id' => (int) $data['location_id']], // Standard location object
             'listing_type' => $data['listing_type'], // sale | rent
             'purpose'      => $data['listing_type'], // Redundant purpose variant
             'type'         => $data['property_type'], // apartment | villa | etc.
             'category'     => $data['category'],
             'price'        => [
-                'value' => (float) $data['price'],
+                'amount' => (float) $data['price'], // amount instead of value
                 'currency' => $data['price_currency'] ?? 'AED',
             ],
             // Redundant price variants
             'price_value' => (float) $data['price'],
             'price_currency' => $data['price_currency'] ?? 'AED',
             
+            'size'         => [
+                'value' => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
+                'unit'  => 'sqft',
+            ], // Standard size object
             'size_sqft'    => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
-            // Redundant area variants
-            'size' => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
-            'area' => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
+            'area'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0), // Redundant area variant
             'title'        => [
                 'en' => $data['title_en'] ?? $data['title'] ?? ''
             ],

@@ -101,7 +101,7 @@ class UpdateListingAction
         // 1. Handle price object if price is provided
         if (isset($data['price'])) {
             $payload['price'] = [
-                'value'    => (float) $data['price'],
+                'amount'   => (float) $data['price'],
                 'currency' => $data['price_currency'] ?? 'AED',
             ];
             // Redundant variants
@@ -183,7 +183,10 @@ class UpdateListingAction
                     $payload['purpose'] = $value;
                 }
                 if ($pfKey === 'size_sqft') {
-                    $payload['size'] = (float) $value;
+                    $payload['size'] = [
+                        'value' => (float) $value,
+                        'unit'  => 'sqft'
+                    ];
                     $payload['area'] = (float) $value;
                 }
 
@@ -208,6 +211,7 @@ class UpdateListingAction
                         'id'   => (int) $value,
                         'type' => 'agent',
                     ];
+                    $payload['agent'] = ['id' => (int) $value];
                     $payload['createdBy'] = ['id' => (int) $value];
                     $payload['created_by_id'] = (int) $value;
                 }
