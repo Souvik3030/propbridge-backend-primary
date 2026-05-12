@@ -49,7 +49,7 @@ class CreateListingAction
                     $listing->update(['images' => $data['images']]);
                 }
                 
-                $payload  = $this->buildPfPayload($data, $agent);
+                $payload  = $this->buildPfPayload($data, $agent, $company);
 
                 // TEMPORARY: Log full payload for debugging
                 Log::info('PropertyFinder listing creation payload', [
@@ -190,93 +190,115 @@ class CreateListingAction
 
     /**
      * Build the payload for PF API POST /listings.
-     * Field names match the PF API v2 spec exactly.
+     * Matches the detailed schema provided.
      */
-   private function buildPfPayload(array $data, ?User $agent): array
+    private function buildPfPayload(array $data, ?User $agent, Company $company): array
     {
+        $agentId = (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0));
+        $listingType = $data['listing_type'] ?? 'sale';
+        $rentFrequency = $data['rent_frequency'] ?? 'yearly';
+
         $payload = [
-            'agent_id'     => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
-            'agent'        => ['id' => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0))], // New agent object
-            'location_id'  => (int) $data['location_id'],
-            'location'     => ['id' => (int) $data['location_id']], // Standard location object
-            'listing_type' => $data['listing_type'], // sale | rent
-            'purpose'      => $data['listing_type'], // Redundant purpose variant
-            'type'         => $data['property_type'], // apartment | villa | etc.
-            'category'     => $data['category'],
-            'price'        => [
-                'amount' => (float) $data['price'], // amount instead of value
-                'currency' => $data['price_currency'] ?? 'AED',
+            'age'           => (int) ($data['age'] ?? 0),
+            'amenities'     => [], // Filled below
+            'assignedTo'    => ['id' => $agentId],
+            'availableFrom' => $data['available_from'] ?? null,
+            'bathrooms'     => (string) ($data['bathrooms'] ?? '0'),
+            'bedrooms'      => (string) ($data['bedrooms'] ?? '0'),
+            'builtUpArea'   => (int) ($data['size_sqft'] ?? $data['size'] ?? 0),
+            'category'      => $data['category'] ?? 'residential',
+            'compliance'    => [
+                'advertisementLicenseIssuanceDate' => $data['advertisement_license_issuance_date'] ?? null,
+                'listingAdvertisementNumber'       => $data['permit_number'] ?? $data['advertisement_number'] ?? '',
+                'type'                             => $data['permit_type'] ?? 'rera',
+                'issuingClientLicenseNumber'       => $company->license_number ?? $data['license_number'] ?? '',
+                'userConfirmedDataIsCorrect'       => true,
             ],
-            // Redundant price variants
-            'price_value' => (float) $data['price'],
-            'price_currency' => $data['price_currency'] ?? 'AED',
-            
-            'size'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0), // Flat numeric value
-            'size_sqft'    => (float) ($data['size_sqft'] ?? $data['size'] ?? 0),
-            'area'         => (float) ($data['size_sqft'] ?? $data['size'] ?? 0), // Redundant area variant
-            'title'        => [
-                'en' => $data['title_en'] ?? $data['title'] ?? ''
+            'createdBy'     => ['id' => $agentId],
+            'description'   => [
+                'en' => $data['description_en'] ?? $data['description'] ?? '',
+                'ar' => $data['description_ar'] ?? null,
             ],
-            'description'  => [
-                'en' => $data['description_en'] ?? $data['description'] ?? ''
+            'developer'     => $data['developer_name'] ?? null,
+            'finishingType' => $data['finishing_type'] ?? 'fully-finished',
+            'floorNumber'   => (string) ($data['floor_number'] ?? ''),
+            'furnishingType' => $data['furnishing_type'] ?? 'unfurnished',
+            'hasGarden'     => (bool) ($data['has_garden'] ?? false),
+            'hasKitchen'    => (bool) ($data['has_kitchen'] ?? false),
+            'hasParkingOnSite' => (bool) ($data['has_parking_on_site'] ?? false),
+            'landNumber'    => $data['land_number'] ?? null,
+            'location'      => ['id' => (int) $data['location_id']],
+            'media'         => [
+                'images' => array_map(fn($url) => [
+                    'original' => ['url' => $url]
+                ], $data['images'] ?? []),
+                'videos' => [
+                    'default' => $data['video_url'] ?? null,
+                    'view360' => $data['virtual_tour'] ?? null,
+                ]
             ],
-            'reference'    => $data['reference'] ?? null,
-            'images'       => $data['images'],
-            'created_by'   => [
-                'id'   => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
-                'type' => 'agent',
+            'mojDeedLocationDescription' => $data['moj_deed_location_description'] ?? null,
+            'numberOfFloors' => (int) ($data['number_of_floors'] ?? 0),
+            'ownerName'      => $data['owner_name'] ?? null,
+            'parkingSlots'   => (int) ($data['parking'] ?? $data['parking_slots'] ?? 0),
+            'plotNumber'     => $data['plot_number'] ?? null,
+            'plotSize'       => (int) ($data['plot_size_sqft'] ?? $data['plot_size'] ?? 0),
+            'price'          => [
+                'amounts'   => [
+                    'daily'   => ($listingType === 'rent' && $rentFrequency === 'daily')   ? (int) $data['price'] : 0,
+                    'monthly' => ($listingType === 'rent' && $rentFrequency === 'monthly') ? (int) $data['price'] : 0,
+                    'sale'    => ($listingType === 'sale')                                 ? (int) $data['price'] : 0,
+                    'weekly'  => ($listingType === 'rent' && $rentFrequency === 'weekly')  ? (int) $data['price'] : 0,
+                    'yearly'  => ($listingType === 'rent' && $rentFrequency === 'yearly')  ? (int) $data['price'] : 0,
+                ],
+                'downpayment'           => (int) ($data['downpayment'] ?? 0),
+                'minimalRentalPeriod'   => (int) ($data['minimal_rental_period'] ?? 0),
+                'mortgage'              => [
+                    'comment' => $data['mortgage_comment'] ?? null,
+                    'enabled' => (bool) ($data['mortgage_enabled'] ?? false),
+                ],
+                'numberOfCheques'       => (int) ($data['cheques'] ?? 0),
+                'numberOfMortgageYears' => (int) ($data['mortgage_years'] ?? 0),
+                'obligation'            => [
+                    'comment' => $data['obligation_comment'] ?? null,
+                    'enabled' => (bool) ($data['obligation_enabled'] ?? false),
+                ],
+                'onRequest'             => (bool) ($data['price_on_request'] ?? false),
+                'paymentMethods'        => is_string($data['payment_methods'] ?? null) ? explode(',', $data['payment_methods']) : ($data['payment_methods'] ?? []),
+                'type'                  => $listingType === 'sale' ? 'sale' : $rentFrequency,
+                'utilitiesInclusive'    => (bool) ($data['utilities_inclusive'] ?? false),
+                'valueAffected'         => [
+                    'comment' => $data['value_affected_comment'] ?? null,
+                    'enabled' => (bool) ($data['value_affected_enabled'] ?? false),
+                ]
             ],
-            // Redundant variants for compatibility
-            'createdBy' => [
-                'id' => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
+            'projectStatus' => $data['project_status'] ?? 'completed',
+            'reference'     => $data['reference'] ?? null,
+            'size'          => (int) ($data['size_sqft'] ?? $data['size'] ?? 0),
+            'street'        => [
+                'direction' => $data['street_direction'] ?? 'North',
+                'width'     => (int) ($data['street_width'] ?? 0),
             ],
-            'created_by_id' => (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0)),
+            'title'         => [
+                'en' => $data['title_en'] ?? $data['title'] ?? '',
+                'ar' => $data['title_ar'] ?? null,
+            ],
+            'type'          => $data['property_type'] ?? 'apartment',
+            'uaeEmirate'    => $data['emirate'] ?? $this->resolveEmirateKey((int) ($data['emirate_id'] ?? 0)),
+            'unitNumber'    => $data['unit_number'] ?? null,
         ];
 
-        if (!empty($data['title_ar'])) {
-            $payload['title']['ar'] = $data['title_ar'];
-        }
-        if (!empty($data['description_ar'])) {
-            $payload['description']['ar'] = $data['description_ar'];
-        }
-        
-        if (isset($data['price_on_request'])) {
-            $payload['price']['on_request'] = (bool) $data['price_on_request'];
+        // Amenities handling: convert to slugs
+        if (!empty($data['amenities'])) {
+            $amenities = is_string($data['amenities']) ? explode(',', $data['amenities']) : $data['amenities'];
+            $payload['amenities'] = array_values(array_unique(array_map(
+                fn($v) => \Illuminate\Support\Str::slug(trim($v)),
+                (array) $amenities
+            )));
         }
 
-        // Conditional fields — only include if present
-        $optionalFields = [
-            'bedrooms', 'bathrooms', 'furnished', 'floor_number', 'parking',
-            'rent_frequency', 'cheques', 'available_from', 'permit_number',
-            'dld_permit_number', 'building_name', 'ownership_type', 'advertisement_number',
-            'developer_name', 'project_name', 'completion_date', 'payment_plan',
-            'plot_size_sqft', 'number_of_floors', 'hotel_name',
-            'zoning_type', 'fitted', 'virtual_tour', 'floor_plan',
-            'amenities',
-        ];
-
-        foreach ($optionalFields as $field) {
-            if (isset($data[$field]) && $data[$field] !== null && $data[$field] !== '') {
-                // PF API expects bedrooms and bathrooms as strings
-                if (in_array($field, ['bedrooms', 'bathrooms'])) {
-                    $payload[$field] = (string) $data[$field];
-                } elseif ($field === 'amenities') {
-                    $amenities = is_string($data[$field]) ? explode(',', $data[$field]) : $data[$field];
-                    $payload[$field] = array_values(array_unique(array_map(
-                        fn($v) => \Illuminate\Support\Str::slug(trim($v)),
-                        (array) $amenities
-                    )));
-                } else {
-                    $payload[$field] = $data[$field];
-                }
-            }
-        }
-
-        // private_pool is boolean — include if true
-        if (!empty($data['private_pool'])) {
-            $payload['private_pool'] = (bool) $data['private_pool'];
-        }
-
+        // Clean up: return all fields as PF API expects many of these even if empty/null in some versions,
+        // but we'll use array_filter to keep it tidy for non-required fields.
         return array_filter($payload, fn($v) => $v !== null);
     }
 
