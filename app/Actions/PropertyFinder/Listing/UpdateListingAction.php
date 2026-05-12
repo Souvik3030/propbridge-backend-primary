@@ -172,8 +172,10 @@ class UpdateListingAction
             if (array_key_exists($localKey, $data)) {
                 $value = $data[$localKey];
 
-                if (in_array($pfKey, ['bedrooms', 'bathrooms', 'agent_id'])) {
+                if (in_array($pfKey, ['bedrooms', 'bathrooms'])) {
                     $value = ($value !== null) ? (string) $value : null;
+                } elseif ($pfKey === 'agent_id') {
+                    $value = ($value !== null) ? (int) $value : null;
                 }
 
                 if ($pfKey === 'amenities' && $value !== null) {
@@ -188,18 +190,18 @@ class UpdateListingAction
 
                 if ($pfKey === 'agent_id' && $value !== null) {
                     $payload['created_by'] = [
-                        'id'   => (string) $value,
+                        'id'   => (int) $value,
                         'type' => 'agent',
                     ];
-                    $payload['createdBy'] = ['id' => (string) $value];
-                    $payload['created_by_id'] = (string) $value;
+                    $payload['createdBy'] = ['id' => (int) $value];
+                    $payload['created_by_id'] = (int) $value;
                 }
             }
         }
 
         // Special: pf_agent_id or agent_pf_id mapping
         if (isset($data['agent_pf_id'])) {
-            $payload['agent_id'] = (string) $data['agent_pf_id'];
+            $payload['agent_id'] = (int) $data['agent_pf_id'];
         }
 
         return array_filter($payload, fn($v) => $v !== null);
