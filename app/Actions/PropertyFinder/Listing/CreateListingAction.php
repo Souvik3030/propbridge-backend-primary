@@ -201,7 +201,7 @@ class CreateListingAction
     private function buildPfPayload(array $data, ?User $agent): array
     {
         $payload = [
-            'agent_id'     => isset($data['agent_id']) ? (int) $data['agent_id'] : ($agent?->pf_agent_id ? (int) $agent->pf_agent_id : null),
+            'agent_id'     => (string) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? '')),
             'location_id'  => (int) $data['location_id'],
             'listing_type' => $data['listing_type'], // sale | rent
             'type'         => $data['property_type'], // apartment | villa | etc.
@@ -220,7 +220,8 @@ class CreateListingAction
             'reference'    => $data['reference'] ?? null,
             'images'       => $data['images'],
             'created_by'   => [
-                'id' => isset($data['agent_id']) ? (int) $data['agent_id'] : ($agent?->pf_agent_id ? (int) $agent->pf_agent_id : null)
+                'id'   => (string) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? '')),
+                'type' => 'agent',
             ],
         ];
 

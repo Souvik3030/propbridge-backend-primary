@@ -172,7 +172,7 @@ class UpdateListingAction
             if (array_key_exists($localKey, $data)) {
                 $value = $data[$localKey];
 
-                if (in_array($pfKey, ['bedrooms', 'bathrooms'])) {
+                if (in_array($pfKey, ['bedrooms', 'bathrooms', 'agent_id'])) {
                     $value = ($value !== null) ? (string) $value : null;
                 }
 
@@ -190,7 +190,7 @@ class UpdateListingAction
 
         // Special: pf_agent_id or agent_pf_id mapping
         if (isset($data['agent_pf_id'])) {
-            $payload['agent_id'] = (int) $data['agent_pf_id'];
+            $payload['agent_id'] = (string) $data['agent_pf_id'];
         }
 
         return array_filter($payload, fn($v) => $v !== null);
