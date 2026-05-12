@@ -144,7 +144,18 @@ class StoreListingRequest extends FormRequest
         $category     = $this->input('category');
         $propertyType = $this->input('property_type');
         $emirateId    = (int) $this->input('emirate_id', 0);
-        $locationName = $this->input('location_name', '');
+        
+        // ── Location Name Resolution for Permit Check ───────────────────────
+        $locationName = $this->input('location_name');
+
+        // Fallback: If they only sent an ID, fetch the name from the DB (if you store locations locally)
+        if (!$locationName && $this->input('location_id')) {
+            // Example if you have a Location model:
+            // $locationName = \App\Models\Location::find($this->input('location_id'))?->name;
+        }
+
+        // Cast to string to prevent passing null to the service
+        $locationName = (string) $locationName;
         
         $permitService = app(\App\Services\PropertyFinder\EmiratePermitService::class);
         $needsPermit   = $permitService->requiresPermit($emirateId, $locationName);
@@ -153,25 +164,12 @@ class StoreListingRequest extends FormRequest
 
             // ── Core required fields ──────────────────────────────────────────
 
-            // reference: User's custom CRM reference
             'reference'     => ['nullable', 'string', 'max:100'],
-
-            // agent_id: PF agent ID integer (sent by frontend)
             'agent_id'      => ['required', 'integer', 'min:1'],
-
-            // location_id: PF location ID from GET /locations
             'location_id'   => ['required', 'integer', 'min:1'],
-
-            // emirate_id: PF API numeric emirate ID (1-7)
             'emirate_id'    => ['required', 'integer', Rule::in([1, 2, 3, 4, 5, 6, 7])],
-
-            // listing_type: replaces 'purpose'
             'listing_type'  => ['required', Rule::in(['sale', 'rent'])],
-
-            // category
             'category'      => ['required', Rule::in(['residential', 'commercial', 'off_plan'])],
-
-            // property_type: replaces 'type'
             'property_type' => [
                 'required',
                 Rule::in(config('propertyfinder.property_types.all', [
@@ -179,44 +177,33 @@ class StoreListingRequest extends FormRequest
                     'land', 'office', 'retail', 'warehouse',
                 ])),
             ],
-
-            // price: required for all listings, must be > 0
             'price'         => ['required', 'numeric', 'min:0.01', 'max:999999999.99'],
             'price_currency'=> ['nullable', 'string', 'size:3'],
-
-            // size_sqft: required for all listings per PF docs
             'size_sqft'     => ['required', 'numeric', 'min:1'],
-
-            // title: 10-150 chars per PF API docs
             'title_en'      => ['required_without:title', 'string', 'min:10', 'max:150'],
             'title'         => ['required_without:title_en', 'string', 'min:10', 'max:150'],
             'title_ar'      => ['nullable', 'string', 'min:10', 'max:150'],
-
-            // description: min 50 chars per PF API docs
             'description_en'=> ['required_without:description', 'string', 'min:50'],
             'description'   => ['required_without:description_en', 'string', 'min:50'],
             'description_ar'=> ['nullable', 'string', 'min:50'],
-
-            // images: at least 1, max 30 per PF API docs
             'images'        => ['required', 'array', 'min:1', 'max:30'],
-            'images.*'      => ['required'], // Each item can be a URL string OR a file object
+            'images.*'      => ['required'], 
             'images_files'  => ['nullable', 'array'],
             'images_files.*' => ['file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:10240'],
 
             // ── Section 4a: Emirate-based permit requirements ─────────────────
 
-            // permit_number: dynamic requirement based on Emirate and exempt areas
+            // Dynamically required based on EmiratePermitService
             'permit_number' => [
                 Rule::requiredIf($needsPermit),
                 'nullable', 'string', 'max:100',
             ],
             
-            // permit_license_number & permit_id (from compliance API)
             'permit_license_number' => ['nullable', 'string', 'max:100'],
             'permit_id'             => ['nullable', 'string', 'max:100'],
             'advertisement_number'  => ['nullable', 'string', 'max:100'],
 
-            // building_name: required for Dubai(1) and Abu Dhabi(2)
+            // Required specifically for Dubai (1) and Abu Dhabi (2)
             'building_name' => [
                 Rule::requiredIf(in_array($emirateId, [1, 2], true)),
                 'nullable', 'string', 'max:255',
@@ -224,20 +211,13 @@ class StoreListingRequest extends FormRequest
 
             // ── Section 4b: Listing type dependencies ─────────────────────────
 
-            // rent_frequency: required_if listing_type = rent
             'rent_frequency' => [
                 Rule::requiredIf($listingType === 'rent'),
                 'nullable',
                 Rule::in(['yearly', 'monthly', 'weekly', 'daily']),
             ],
-
-            // cheques: optional, 1-12
             'cheques' => ['nullable', 'integer', 'min:1', 'max:12'],
-
-            // available_from: optional ISO date
             'available_from' => ['nullable', 'date', 'date_format:Y-m-d'],
-
-            // ownership_type: required_if listing_type = sale
             'ownership_type' => [
                 Rule::requiredIf($listingType === 'sale'),
                 'nullable',
@@ -246,19 +226,14 @@ class StoreListingRequest extends FormRequest
 
             // ── Section 4b: Category dependencies ────────────────────────────
 
-            // bedrooms: required_if category = residential (0 = studio)
             'bedrooms' => [
                 Rule::requiredIf($category === 'residential'),
                 'nullable', 'integer', 'min:0', 'max:20',
             ],
-
-            // bathrooms: required_if category = residential
             'bathrooms' => [
                 Rule::requiredIf($category === 'residential'),
                 'nullable', 'integer', 'min:1', 'max:20',
             ],
-
-            // off_plan required fields
             'developer_name'  => [
                 Rule::requiredIf($category === 'off_plan'),
                 'nullable', 'string', 'max:255',
@@ -275,35 +250,22 @@ class StoreListingRequest extends FormRequest
 
             // ── Section 4c: Property type dependencies ────────────────────────
 
-            // floor_number: recommended for apartment/penthouse
             'floor_number' => ['nullable', 'integer', 'min:0'],
-
-            // number_of_floors: recommended for villa/townhouse
             'number_of_floors' => ['nullable', 'integer', 'min:1'],
-
-            // private_pool: required_if penthouse (defaults false)
             'private_pool' => ['nullable', 'boolean'],
-
-            // hotel_name: required_if hotel_apartment
             'hotel_name' => [
                 Rule::requiredIf($propertyType === 'hotel_apartment'),
                 'nullable', 'string', 'max:255',
             ],
-
-            // plot_size_sqft: required_if villa|townhouse|land
             'plot_size_sqft' => [
                 Rule::requiredIf(in_array($propertyType, ['villa', 'townhouse', 'land'], true)),
                 'nullable', 'numeric', 'min:1',
             ],
-
-            // zoning_type: required_if land
             'zoning_type' => [
                 Rule::requiredIf($propertyType === 'land'),
                 'nullable',
                 Rule::in(['residential', 'commercial', 'mixed', 'industrial']),
             ],
-
-            // fitted: required_if office|retail|warehouse
             'fitted' => [
                 Rule::requiredIf(in_array($propertyType, ['office', 'retail', 'warehouse'], true)),
                 'nullable',
@@ -319,8 +281,6 @@ class StoreListingRequest extends FormRequest
             'price_on_request' => ['nullable', 'boolean'],
             'amenities'       => ['nullable', 'array'],
             'amenities.*'     => ['string', Rule::in(config('propertyfinder.amenities', []))],
-
-            // project_status (optional, useful for off_plan)
             'project_status'  => ['nullable', Rule::in([
                 'off_plan', 'off_plan_primary', 'completed', 'completed_primary', 'off_plan_under_construction'
             ])],
