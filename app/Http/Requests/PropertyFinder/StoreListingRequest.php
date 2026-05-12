@@ -25,6 +25,123 @@ class StoreListingRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
+        // ── Nested Payload Flattening ───────────────────────────────────────
+        // If the frontend sends the structured JSON, we flatten it here so the
+        // existing rules and actions continue to work without modification.
+
+        // Agent & Location
+        if ($this->has('assignedTo.id')) {
+            $this->merge(['agent_id' => $this->input('assignedTo.id')]);
+        }
+        if ($this->has('location.id')) {
+            $this->merge(['location_id' => $this->input('location.id')]);
+        }
+
+        // Classification
+        if ($this->has('type') && !$this->has('property_type')) {
+            $this->merge(['property_type' => $this->input('type')]);
+        }
+        if ($this->has('category')) {
+            // Ensure category is in snake_case if it comes as camelCase
+            $this->merge(['category' => \Illuminate\Support\Str::snake($this->input('category'))]);
+        }
+        if ($this->has('projectStatus')) {
+            $this->merge(['project_status' => $this->input('projectStatus')]);
+        }
+
+        // Title & Description
+        if ($this->has('title.en')) {
+            $this->merge(['title_en' => $this->input('title.en')]);
+        }
+        if ($this->has('title.ar')) {
+            $this->merge(['title_ar' => $this->input('title.ar')]);
+        }
+        if ($this->has('description.en')) {
+            $this->merge(['description_en' => $this->input('description.en')]);
+        }
+        if ($this->has('description.ar')) {
+            $this->merge(['description_ar' => $this->input('description.ar')]);
+        }
+
+        // Pricing & Size
+        if ($this->has('price.amounts')) {
+            $amounts = $this->input('price.amounts');
+            $type = $this->input('price.type', 'sale');
+            
+            // Map PF frequency slugs to our internal listing_type
+            $listingType = in_array($type, ['yearly', 'monthly', 'weekly', 'daily']) ? 'rent' : 'sale';
+            $this->merge(['listing_type' => $listingType]);
+            
+            if ($listingType === 'rent') {
+                $this->merge(['rent_frequency' => $type]);
+            }
+
+            // Extract the price value
+            $price = $amounts[$type] ?? 0;
+            if ($price == 0) {
+                // Fallback to first non-zero amount
+                $price = array_values(array_filter($amounts, fn($v) => $v > 0))[0] ?? 0;
+            }
+            $this->merge(['price' => $price]);
+
+            if ($this->has('price.onRequest')) {
+                $this->merge(['price_on_request' => $this->input('price.onRequest')]);
+            }
+        }
+
+        if ($this->has('builtUpArea') || $this->has('size')) {
+            $this->merge(['size_sqft' => $this->input('builtUpArea') ?? $this->input('size')]);
+        }
+
+        // Emirate Mapping
+        if ($this->has('uaeEmirate')) {
+            $slug = \Illuminate\Support\Str::slug($this->input('uaeEmirate'));
+            $emirateMapping = [
+                'dubai'             => 1,
+                'abu-dhabi'         => 2,
+                'sharjah'           => 3,
+                'ajman'             => 4,
+                'rak'               => 5,
+                'fujairah'          => 6,
+                'uaq'               => 7,
+                'northern-emirates' => 1, // Default or specific mapping
+            ];
+            if (isset($emirateMapping[$slug])) {
+                $this->merge(['emirate_id' => $emirateMapping[$slug]]);
+            }
+        }
+
+        // Media
+        if ($this->has('media.images') && is_array($this->input('media.images'))) {
+            $images = array_map(function($img) {
+                return is_array($img) ? ($img['original']['url'] ?? null) : $img;
+            }, $this->input('media.images'));
+            $this->merge(['images' => array_filter($images)]);
+        }
+
+        // Compliance
+        if ($this->has('compliance')) {
+            $this->merge([
+                'permit_number' => $this->input('compliance.listingAdvertisementNumber'),
+                'permit_type'   => $this->input('compliance.type'),
+                'license_number' => $this->input('compliance.issuingClientLicenseNumber'),
+                'advertisement_license_issuance_date' => $this->input('compliance.advertisementLicenseIssuanceDate'),
+            ]);
+        }
+
+        // Specs (Handle "studio" and "none" strings)
+        if ($this->has('bedrooms')) {
+            $val = $this->input('bedrooms');
+            if ($val === 'studio') $this->merge(['bedrooms' => 0]);
+            elseif (is_numeric($val)) $this->merge(['bedrooms' => (int)$val]);
+        }
+        if ($this->has('bathrooms')) {
+            $val = $this->input('bathrooms');
+            if ($val === 'none') $this->merge(['bathrooms' => 0]);
+            elseif (is_numeric($val)) $this->merge(['bathrooms' => (int)$val]);
+        }
+
+        // ── Original Amenities logic ────────────────────────────────────────
         if ($this->has('amenities') && is_array($this->amenities)) {
             $this->merge([
                 'amenities' => array_map(function($v) {
