@@ -27,6 +27,14 @@ class PropertyFinderListingResource extends JsonResource
             'emirate_id'      => $this->emirate_id,
             'emirate'         => $this->emirate,
             'location_id'     => $this->location_id,
+            'pf_location_name' => $this->pf_location_name,
+            'pf_city'         => $this->pf_city,
+            'pf_community'    => $this->pf_community,
+            'pf_subcommunity' => $this->pf_subcommunity,
+            'pf_building'     => $this->pf_building,
+            'uae_emirate'     => $this->uae_emirate,
+            'latitude'        => $this->latitude,
+            'longitude'       => $this->longitude,
 
             // ── Permits & Compliance ─────────────────────────────────────────────
             'permit_number'       => $this->permit_number,
@@ -43,10 +51,12 @@ class PropertyFinderListingResource extends JsonResource
             // ── Pricing ──────────────────────────────────────────────────────────
             'price' => [
                 'value'           => (float) $this->price,
-                'currency'        => 'AED',
-                'formatted'       => 'AED ' . number_format((float) $this->price, 2),
+                'currency'        => $this->price_currency ?? 'AED',
+                'formatted'       => ($this->price_currency ?? 'AED') . ' ' . number_format((float) $this->price, 2),
                 'on_request'      => (bool) $this->price_on_request,
             ],
+            'price_currency'  => $this->price_currency ?? 'AED',
+            'price_on_request' => (bool) $this->price_on_request,
             'ownership_type'  => $this->ownership_type,
 
             // ── Content ──────────────────────────────────────────────────────────
@@ -107,6 +117,7 @@ class PropertyFinderListingResource extends JsonResource
             'last_compliance_check_at' => $this->last_compliance_check_at?->toIso8601String(),
             'created_at'               => $this->created_at->toIso8601String(),
             'updated_at'               => $this->updated_at->toIso8601String(),
+            'agent_id'                 => $this->agent_id,
 
             // ── Relationships ──────────────────────────────────────────────────
             'agent' => $this->whenLoaded('agent', fn () => [

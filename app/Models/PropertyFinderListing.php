@@ -115,6 +115,17 @@ class PropertyFinderListing extends Model
         'last_compliance_check_at',
         'published_at',
         'unpublish_reason',
+
+        // New Location fields
+        'pf_location_name',
+        'pf_city',
+        'pf_community',
+        'pf_subcommunity',
+        'pf_building',
+        'uae_emirate',
+        'latitude',
+        'longitude',
+        'price_currency',
     ];
 
     protected $casts = [

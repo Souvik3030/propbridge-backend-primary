@@ -21,6 +21,7 @@ use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 
 class PropertyFinderListingController extends Controller
@@ -96,10 +97,10 @@ class PropertyFinderListingController extends Controller
         $pfAgentId = (int) ($matchedAgent['publicProfile']['id'] ?? $matchedAgent['id']);
         $validated['agent_id'] = $pfAgentId;
 
-        // Optional: persist pf_user_id on the local user record
+        // Optional: persist pf_agent_id on the local user record if not set
         $localAgent = \App\Models\User::find($request->user()->id);
-        if ($localAgent && empty($localAgent->pf_user_id)) {
-            $localAgent->update(['pf_user_id' => $pfAgentId]);
+        if ($localAgent && empty($localAgent->pf_agent_id)) {
+            $localAgent->update(['pf_agent_id' => $pfAgentId]);
         }
 
     } catch (\Exception $e) {
@@ -130,14 +131,121 @@ class PropertyFinderListingController extends Controller
     /**
      * Update a listing (partial PATCH — only changed fields).
      */
+    // public function update(
+    //     UpdateListingRequest $request,
+    //     PropertyFinderListing $listing,
+    //     UpdateListingAction $action,
+    //     PropertyFinderApiClient $client
+    // ): JsonResponse {
+    //     $this->authorize('update', $listing);
+
+    //     $validated = $request->validated();
+
+    //     // If agent_id is in the PATCH, verify it against live PF agents
+    //     if (isset($validated['agent_id'])) {
+    //         try {
+    //             $liveAgents = collect($client->get($listing->company, 'users')['data'] ?? []);
+    //             $requestedId = (int) $validated['agent_id'];
+                
+    //             $matchedAgent = $liveAgents->first(fn($a) =>
+    //                 (int) ($a['id'] ?? 0) === $requestedId ||
+    //                 (int) ($a['publicProfile']['id'] ?? 0) === $requestedId
+    //             );
+
+    //             if (!$matchedAgent) {
+    //                 return response()->json(['message' => "Agent ID {$requestedId} is not valid."], 422);
+    //             }
+
+    //             $validated['agent_id'] = (int) ($matchedAgent['publicProfile']['id'] ?? $matchedAgent['id']);
+
+    //             // Optional: link current local user to this PF agent if not already linked
+    //             $localUser = $request->user();
+    //             if ($localUser && empty($localUser->pf_agent_id)) {
+    //                 $localUser->update(['pf_agent_id' => $validated['agent_id']]);
+    //             }
+    //         } catch (\Exception $e) {
+    //             Log::error('PF agent verification failed on update', ['error' => $e->getMessage()]);
+    //             return response()->json(['message' => 'Agent verification failed: ' . $e->getMessage()], 500);
+    //         }
+    //     }
+
+    //     $updatedListing = $action->execute($listing, $validated);
+
+    //     return response()->json([
+    //         'message' => 'Listing updated successfully.',
+    //         'listing' => new PropertyFinderListingResource($updatedListing),
+    //     ]);
+    // }
+
+    /**
+     * Update a listing (partial PATCH — only changed fields).
+     */
     public function update(
         UpdateListingRequest $request,
         PropertyFinderListing $listing,
-        UpdateListingAction $action
+        UpdateListingAction $action,
+        PropertyFinderApiClient $client
     ): JsonResponse {
         $this->authorize('update', $listing);
 
-        $updatedListing = $action->execute($listing, $request->validated());
+        $validated = $request->validated();
+
+        // 1. Handle frontend sending nested 'assignedTo.id' instead of 'agent_id'
+        $requestedAgentId = $validated['agent_id'] ?? $request->input('assignedTo.id');
+
+        // If an agent is specified in the PATCH, verify and map it to the LOCAL user
+        if ($requestedAgentId) {
+            try {
+                $liveAgents = collect($client->get($listing->company, 'users')['data'] ?? []);
+                $requestedId = (int) $requestedAgentId;
+                
+                $matchedAgent = $liveAgents->first(fn($a) =>
+                    (int) ($a['id'] ?? 0) === $requestedId ||
+                    (int) ($a['publicProfile']['id'] ?? 0) === $requestedId
+                );
+
+                if (!$matchedAgent) {
+                    return response()->json(['message' => "Agent ID {$requestedId} is not valid."], 422);
+                }
+
+                $pfAgentId = (int) ($matchedAgent['publicProfile']['id'] ?? $matchedAgent['id']);
+
+                // Find the local user associated with this PF agent ID
+                $localUser = \App\Models\User::where('pf_agent_id', $pfAgentId)
+                                             ->where('company_id', $listing->company_id)
+                                             ->first();
+
+                // IMPORTANT: The Action expects the LOCAL user ID, not the PF ID.
+                // This resolves the "Could not resolve agent_id" warning.
+                if ($localUser) {
+                    $validated['agent_id'] = $localUser->id;
+                } else {
+                    // Fallback: Link current user if no other user has this PF agent ID
+                    $currentUser = $request->user();
+                    if (empty($currentUser->pf_agent_id)) {
+                        $currentUser->update(['pf_agent_id' => $pfAgentId]);
+                    }
+                    $validated['agent_id'] = $currentUser->id;
+                }
+
+                // Remove assignedTo so it doesn't pollute the validated array
+                unset($validated['assignedTo']);
+
+            } catch (\Exception $e) {
+                Log::error('PF agent verification failed on update', ['error' => $e->getMessage()]);
+                return response()->json(['message' => 'Agent verification failed: ' . $e->getMessage()], 500);
+            }
+        }
+
+        // 2. Sanitize Payload for PATCH
+        // Strip read-only or complex nested objects sent by the frontend. 
+        // Passing these causes the PF API HMAC signature calculation to fail and throw the 403 Auth error.
+        $readOnlyFields = ['media', 'location', 'createdBy', 'uaeEmirate'];
+        foreach ($readOnlyFields as $field) {
+            unset($validated[$field]);
+        }
+
+        $updatedListing = $action->execute($listing, $validated);
 
         return response()->json([
             'message' => 'Listing updated successfully.',

@@ -6,6 +6,7 @@ namespace App\Actions\PropertyFinder\Listing;
 
 use App\Exceptions\PropertyFinder\PropertyFinderException;
 use App\Models\PropertyFinderListing;
+use App\Models\User;
 use App\Services\PropertyFinderApiClient;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -13,13 +14,11 @@ use Illuminate\Support\Facades\Log;
 /**
  * Update an existing PropertyFinder listing.
  *
- * CORRECT ENDPOINT: PATCH /listings/{listing_id} (partial update)
+ * Uses PUT /listings/{listing_id} — Property Finder's PATCH endpoint rejects
+ * Bearer JWT auth with an HMAC signature error for all accounts; PUT works correctly.
  *
- * Notes:
- *  - Only send changed fields (PATCH = partial update)
- *  - images field is a FULL REPLACE — always include all images (old + new)
- *  - After significant changes, re-run compliance check
- *  - Can update listing in any status: draft, active, under_review
+ * PUT = full replace, so we merge existing listing data with incoming changes
+ * before building the payload to satisfy all required fields.
  */
 class UpdateListingAction
 {
@@ -29,13 +28,22 @@ class UpdateListingAction
     ) {}
 
     /**
-     * Update a listing: validate → update locally → PATCH to PF API.
+     * Update a listing: validate → update locally → PUT to PF API (full replace).
      */
     public function execute(PropertyFinderListing $listing, array $data): PropertyFinderListing
     {
         // Validate dependent fields for the merged data (existing + new)
         $mergedData = array_merge($this->listingToArray($listing), $data);
         $this->validateDependentFields->execute($mergedData);
+
+        $listing->loadMissing('company');
+        $company = $listing->company()->firstOrFail();
+        $creds   = $company->getPropertyFinderCredentials();
+        Log::debug('UpdateListingAction company creds check', [
+            'company_id' => $company->id,
+            'has_key'    => !empty($creds['api_key'] ?? $creds['client_id'] ?? null),
+            'has_secret' => !empty($creds['api_secret'] ?? $creds['client_secret'] ?? null),
+        ]);
 
         return DB::transaction(function () use ($listing, $data, $mergedData) {
 
@@ -45,24 +53,70 @@ class UpdateListingAction
             }
 
             // Update local record (only the changed fields)
-            $listing->update($this->filterUpdateData($data));
+            $localData = $this->filterUpdateData($data);
 
-            // If listing exists on PF, send PATCH to PF API
+            // Resolve PF Agent ID (integer) to local User ID (UUID) for the local DB record.
+            // The controller sends the local user UUID as agent_id. We confirm it is valid.
+            // We also derive the PF integer agent ID here so the PATCH payload uses the
+            // correct integer, not a UUID cast to int (which yields 0 → 403 Forbidden).
+            $pfAgentId = null;
+            if (isset($localData['agent_id'])) {
+                $providedId = $localData['agent_id'];
+
+                // 1. Try finding the local user directly (UUID passed from controller)
+                $localUser = User::find($providedId);
+
+                // 2. Fallback: look up by pf_agent_id integer
+                if (!$localUser) {
+                    $localUser = User::where('pf_agent_id', $providedId)->first();
+                }
+
+                if ($localUser) {
+                    $localData['agent_id'] = $localUser->id;          // store local UUID in DB
+                    $pfAgentId             = (int) $localUser->pf_agent_id; // integer for PF API
+                    if (!$pfAgentId) {
+                        Log::warning('UpdateListingAction: Local user found but pf_agent_id is empty.', [
+                            'user_id'    => $localUser->id,
+                            'listing_id' => $listing->id,
+                        ]);
+                        $pfAgentId = null;
+                    }
+                } else {
+                    Log::warning('UpdateListingAction: Could not resolve agent_id to a local user.', [
+                        'provided_id' => $providedId,
+                        'listing_id'  => $listing->id,
+                    ]);
+                    unset($localData['agent_id']);
+                }
+            }
+
+            $listing->update($localData);
+
+            // If listing exists on PF, send PUT to PF API (full replace).
+            // NOTE: PATCH is broken on PF's side — their CDN rejects Bearer JWT with an
+            // HMAC error. PUT passes auth correctly and accepts partial fields too.
             if ($listing->pf_id) {
                 try {
-                    $pfPayload = $this->buildPfUpdatePayload($data);
+                    // Merge existing listing data with incoming changes for a full PUT payload.
+                    // Re-fresh listing to get latest local state after update().
+                    $listing->refresh();
+                    $pfPayload = $this->buildPfPutPayload($listing, $data, $pfAgentId);
 
-                    if (!empty($pfPayload)) {
-                        $this->client->patch(
-                            $listing->company,
-                            "listings/{$listing->pf_id}",
-                            $pfPayload
-                        );
-                    }
-
-                    Log::info('PropertyFinder listing updated on PF API', [
+                    Log::info('PropertyFinder PUT payload', [
                         'listing_id' => $listing->id,
                         'pf_id'      => $listing->pf_id,
+                        'payload'    => $pfPayload,
+                    ]);
+
+                    $this->client->put(
+                        $listing->company,
+                        "listings/{$listing->pf_id}",
+                        $pfPayload
+                    );
+
+                    Log::info('PropertyFinder listing updated on PF API via PUT', [
+                        'listing_id'     => $listing->id,
+                        'pf_id'          => $listing->pf_id,
                         'fields_updated' => array_keys($pfPayload),
                     ]);
 
@@ -91,152 +145,167 @@ class UpdateListingAction
     }
 
     /**
-     * Map local DB field names to PF API v2 field names for PATCH.
-     * Only include fields that were actually provided in the update request.
+     * Build a full PUT payload by merging the existing listing with incoming changes.
+     *
+     * PUT requires all fields — we read the current state from the DB record
+     * and overlay only the fields that were actually updated.
+     *
+     * @param PropertyFinderListing $listing   Fresh DB record (after local update)
+     * @param array                 $data      Validated incoming changes
+     * @param int|null              $pfAgentId Resolved PF integer agent ID
      */
-    private function buildPfUpdatePayload(array $data): array
+    private function buildPfPutPayload(PropertyFinderListing $listing, array $data, ?int $pfAgentId = null): array
     {
-        $payload = [];
+        // Resolve agent ID: prefer the explicitly resolved pfAgentId,
+        // fall back to the agent on the listing record.
+        $agentId = $pfAgentId;
+        if (!$agentId && $listing->agent_id) {
+            $agent = \App\Models\User::find($listing->agent_id);
+            $agentId = $agent ? (int) $agent->pf_agent_id : null;
+        }
 
-        // 1. Handle price object if price is provided
-        if (isset($data['price'])) {
-            $purpose = ($data['listing_type'] ?? 'sale') === 'rent' ? ($data['rent_frequency'] ?? 'yearly') : 'sale';
-            
-            $payload['price'] = [
-                'amount'   => (float) $data['price'],
-                'currency' => $data['price_currency'] ?? 'AED',
-                'type'     => $purpose,
-                'amounts'  => [
-                    $purpose => (float) $data['price']
+        $listingType   = $listing->listing_type ?? $listing->purpose ?? 'sale';
+        $rentFrequency = $listing->rent_frequency ?? 'yearly';
+        $priceType     = $listingType === 'rent' ? $rentFrequency : 'sale';
+        $price         = (float) $listing->price;
+
+        // Emirate slug mapping
+        $emirateId = (int) ($listing->emirate_id ?? 0);
+        $uaeEmirate = match ($emirateId) {
+            1       => 'dubai',
+            2       => 'abu_dhabi',
+            default => 'northern_emirates',
+        };
+
+        // Images — always send current full set
+        $images = $listing->images ?? [];
+        if (isset($data['images']) && is_array($data['images'])) {
+            $images = $data['images'];
+        }
+
+        $beds  = (string) ($listing->bedrooms ?? '0');
+        $baths = (string) ($listing->bathrooms ?? '0');
+
+        $payload = [
+            'age'           => 0,
+            'amenities'     => $this->resolveAmenities($data['amenities'] ?? $listing->amenities),
+            'assignedTo'    => $agentId ? ['id' => $agentId] : null,
+            'createdBy'     => $agentId ? ['id' => $agentId] : null,
+            'availableFrom' => $listing->available_from,
+            'bathrooms'     => $baths === '0' ? 'none' : $baths,
+            'bedrooms'      => $beds  === '0' ? 'studio' : $beds,
+            'builtUpArea'   => (int) $listing->size,
+            'category'      => $listing->category ?? 'residential',
+            'compliance'    => [
+                'listingAdvertisementNumber' => $listing->permit_number ?? '',
+                'type'                       => $listing->permit_type ?? 'rera',
+                'issuingClientLicenseNumber' => $listing->license_number ?? '',
+                'userConfirmedDataIsCorrect' => true,
+            ],
+            'description'   => [
+                'en' => $data['description_en'] ?? $data['description'] ?? $listing->description_en ?? '',
+                'ar' => $data['description_ar'] ?? $listing->description_ar,
+            ],
+            'developer'     => $listing->developer_name,
+            'finishingType' => 'fully-finished',
+            'floorNumber'   => (string) ($listing->floor_number ?? ''),
+            'furnishingType' => $listing->furnished ?? 'unfurnished',
+            'hasGarden'     => false,
+            'hasKitchen'    => false,
+            'hasParkingOnSite' => false,
+            'location'      => ['id' => (int) ($data['location_id'] ?? $listing->location_id)],
+            'media'         => [
+                'images' => array_map(fn($url) => [
+                    'original' => ['url' => $url],
+                    'caption'  => '',
+                ], $images),
+                'videos' => new \stdClass(),
+            ],
+            'numberOfFloors'  => 0,
+            'parkingSlots'    => (int) ($listing->parking ?? 0),
+            'plotSize'        => (int) ($listing->plot_size_sqft ?? 0),
+            'price'           => [
+                'amounts' => [
+                    'daily'   => ($listingType === 'rent' && $rentFrequency === 'daily')   ? $price : 0,
+                    'monthly' => ($listingType === 'rent' && $rentFrequency === 'monthly') ? $price : 0,
+                    'sale'    => ($listingType === 'sale')                                  ? $price : 0,
+                    'weekly'  => ($listingType === 'rent' && $rentFrequency === 'weekly')   ? $price : 0,
+                    'yearly'  => ($listingType === 'rent' && $rentFrequency === 'yearly')   ? $price : 0,
                 ],
-            ];
-            // Redundant variants
-            $payload['price_value'] = (float) $data['price'];
-            $payload['price_currency'] = $data['price_currency'] ?? 'AED';
-
-            if (isset($data['price_on_request'])) {
-                $payload['price']['on_request'] = (bool) $data['price_on_request'];
-            }
-        } elseif (isset($data['price_on_request'])) {
-             // Only price_on_request changed? Still need it inside price object
-             $payload['price'] = [
-                 'on_request' => (bool) $data['price_on_request']
-             ];
-        }
-
-        // 2. Handle title object
-        if (isset($data['title_en']) || isset($data['title'])) {
-            $payload['title'] = [
-                'en' => $data['title_en'] ?? $data['title']
-            ];
-            if (isset($data['title_ar'])) {
-                $payload['title']['ar'] = $data['title_ar'];
-            }
-        } elseif (isset($data['title_ar'])) {
-            $payload['title'] = ['ar' => $data['title_ar']];
-        }
-
-        // 3. Handle description object
-        if (isset($data['description_en']) || isset($data['description'])) {
-            $payload['description'] = [
-                'en' => $data['description_en'] ?? $data['description']
-            ];
-            if (isset($data['description_ar'])) {
-                $payload['description']['ar'] = $data['description_ar'];
-            }
-        } elseif (isset($data['description_ar'])) {
-            $payload['description'] = ['ar' => $data['description_ar']];
-        }
-
-        // 4. Handle all other fields
-        $otherFields = [
-            'agent_id'         => 'agent_id',
-            'permit_number'    => 'permit_number',
-            'images'           => 'images',
-            'available_from'   => 'available_from',
-            'furnished'        => 'furnished',
-            'amenities'        => 'amenities',
-            'rent_frequency'   => 'rent_frequency',
-            'cheques'          => 'cheques',
-            'floor_number'     => 'floor_number',
-            'parking'          => 'parking',
-            'bedrooms'         => 'bedrooms',
-            'bathrooms'        => 'bathrooms',
-            'building_name'    => 'building_name',
-            'dld_permit_number' => 'dld_permit_number',
-            'developer_name'   => 'developer_name',
-            'project_name'     => 'project_name',
-            'completion_date'  => 'completion_date',
-            'virtual_tour'     => 'virtual_tour',
-            'floor_plan'       => 'floor_plan',
-            'hotel_name'       => 'hotel_name',
-            'zoning_type'      => 'zoning_type',
-            'fitted'           => 'fitted',
-            'ownership_type'   => 'ownership_type',
-            'listing_type'     => 'listing_type',
-            'property_type'    => 'type',
-            'size'             => 'size_sqft',
+                'downpayment'     => 0,
+                'mortgage'        => ['comment' => null, 'enabled' => false],
+                'numberOfCheques' => (int) ($listing->cheques ?? 0),
+                'obligation'      => ['comment' => null, 'enabled' => false],
+                'onRequest'       => (bool) ($listing->price_on_request ?? false),
+                'paymentMethods'  => [],
+                'type'            => $priceType,
+                'utilitiesInclusive' => false,
+                'valueAffected'   => ['comment' => null, 'enabled' => false],
+            ],
+            'projectStatus' => $listing->project_status ?? 'completed',
+            'reference'     => $data['reference'] ?? $listing->pf_reference ?? $listing->reference,
+            'size'          => (int) $listing->size,
+            'street'        => ['direction' => 'North', 'width' => 0],
+            'title'         => [
+                'en' => $data['title_en'] ?? $data['title'] ?? $listing->title_en ?? '',
+                'ar' => $data['title_ar'] ?? $listing->title_ar,
+            ],
+            'type'          => $data['property_type'] ?? $listing->property_type ?? $listing->type ?? 'apartment',
+            'uaeEmirate'    => $uaeEmirate,
+            'buildingName'  => $data['building_name'] ?? $listing->building_name,
+            'ownershipType' => $data['ownership_type'] ?? $listing->ownership_type,
         ];
 
-        foreach ($otherFields as $localKey => $pfKey) {
-            if (array_key_exists($localKey, $data)) {
-                $value = $data[$localKey];
+        // Override price if price field was explicitly updated
+        if (isset($data['price'])) {
+            $newPrice = (float) $data['price'];
+            $newType  = ($data['listing_type'] ?? $listingType) === 'rent'
+                ? ($data['rent_frequency'] ?? $rentFrequency)
+                : 'sale';
+            $payload['price']['amounts'] = [
+                'daily'   => ($newType === 'daily')   ? $newPrice : 0,
+                'monthly' => ($newType === 'monthly') ? $newPrice : 0,
+                'sale'    => ($newType === 'sale')    ? $newPrice : 0,
+                'weekly'  => ($newType === 'weekly')  ? $newPrice : 0,
+                'yearly'  => ($newType === 'yearly')  ? $newPrice : 0,
+            ];
+            $payload['price']['type'] = $newType;
+        }
 
-                if ($pfKey === 'location_id') {
-                    $payload['location'] = ['id' => (int) $value];
-                }
-                if ($pfKey === 'listing_type') {
-                    $payload['purpose'] = $value;
-                }
-                if ($pfKey === 'size_sqft') {
-                    $payload['size'] = (float) $value;
-                    $payload['area'] = (float) $value;
-                }
+        // Override purpose/listing_type if updated
+        if (isset($data['listing_type'])) {
+            $payload['purpose'] = $data['listing_type'];
+        } else {
+            $payload['purpose'] = $listingType;
+        }
 
-                if (in_array($pfKey, ['bedrooms', 'bathrooms'])) {
-                    $value = ($value !== null) ? (string) $value : null;
-                } elseif ($pfKey === 'agent_id') {
-                    $value = ($value !== null) ? (int) $value : null;
-                }
+        // Remove null values recursively
+        return $this->removeNullsRecursively($payload);
+    }
 
-                if ($pfKey === 'amenities' && $value !== null) {
-                    $amenities = is_string($value) ? explode(',', $value) : $value;
-                    $value = array_values(array_unique(array_map(
-                        fn($v) => \Illuminate\Support\Str::slug(trim($v)),
-                        (array) $amenities
-                    )));
-                }
+    private function resolveAmenities(mixed $amenities): array
+    {
+        if (empty($amenities)) {
+            return [];
+        }
+        $arr = is_string($amenities) ? explode(',', $amenities) : (array) $amenities;
+        return array_values(array_unique(array_map(
+            fn($v) => \Illuminate\Support\Str::slug(trim($v)),
+            $arr
+        )));
+    }
 
-                $payload[$pfKey] = $value;
-
-                if ($pfKey === 'agent_id' && $value !== null) {
-                    $payload['created_by'] = [
-                        'id'   => (int) $value,
-                        'type' => 'agent',
-                    ];
-                    $payload['agent'] = ['id' => (int) $value];
-                    $payload['assignedTo'] = ['id' => (int) $value];
-                    $payload['createdBy'] = ['id' => (int) $value];
-                    $payload['created_by_id'] = (int) $value;
-                }
-                
-                if ($pfKey === 'images' && is_array($value)) {
-                    $payload['media'] = [
-                        'images' => array_map(fn($url) => [
-                            'original' => ['url' => $url],
-                            'caption'  => ''
-                        ], $value)
-                    ];
-                }
+    private function removeNullsRecursively(array $array): array
+    {
+        foreach ($array as $key => &$value) {
+            if (is_array($value)) {
+                $value = $this->removeNullsRecursively($value);
+            }
+            if ($value === null) {
+                unset($array[$key]);
             }
         }
-
-        // Special: pf_agent_id or agent_pf_id mapping
-        if (isset($data['agent_pf_id'])) {
-            $payload['agent_id'] = (int) $data['agent_pf_id'];
-        }
-
-        return array_filter($payload, fn($v) => $v !== null);
+        return $array;
     }
 
     /**
@@ -248,15 +317,17 @@ class UpdateListingAction
             'listing_type', 'property_type', 'category', 'location_id',
             'permit_number', 'license_number', 'building_name', 'dld_permit_number',
             'title_en', 'description_en', 'title_ar', 'description_ar',
-            'price', 'price_on_request', 'ownership_type',
-            'size', 'plot_size_sqft',
+            'price', 'price_on_request', 'ownership_type', 'price_currency',
+            'size', 'size_sqft', 'plot_size_sqft',
             'bedrooms', 'bathrooms', 'floor_number', 'number_of_floors',
             'private_pool', 'hotel_name', 'parking', 'furnished',
             'rent_frequency', 'cheques', 'available_from',
             'fitted', 'zoning_type',
             'developer_name', 'project_name', 'completion_date', 'payment_plan',
             'images', 'amenities', 'virtual_tour', 'floor_plan',
-            'agent_id',
+            'agent_id', 'emirate_id', 'uae_emirate', 'latitude', 'longitude',
+            'pf_location_name', 'pf_city', 'pf_community', 'pf_subcommunity', 'pf_building',
+            'price_currency',
         ];
 
         return array_intersect_key($data, array_flip($allowed));

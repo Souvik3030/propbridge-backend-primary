@@ -111,8 +111,10 @@ class PropertyFinderApiClient
      */
     private function buildRequest(Company $company): \Illuminate\Http\Client\PendingRequest
     {
+        $token = $this->getAccessToken($company);
+        Log::debug('PF Auth Header', ['header' => 'Bearer ' . substr($token, 0, 10) . '...']);
         return $this->baseRequest()
-            ->withToken($this->getAccessToken($company));
+            ->withToken($token);
     }
 
     private function baseRequest(): \Illuminate\Http\Client\PendingRequest

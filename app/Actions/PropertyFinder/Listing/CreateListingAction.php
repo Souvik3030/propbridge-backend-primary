@@ -183,6 +183,17 @@ class CreateListingAction
             'virtual_tour'     => $data['virtual_tour'] ?? null,
             'floor_plan'       => $data['floor_plan'] ?? null,
 
+            // New Location metadata
+            'pf_location_name' => $data['pf_location_name'] ?? null,
+            'pf_city'          => $data['pf_city'] ?? null,
+            'pf_community'     => $data['pf_community'] ?? null,
+            'pf_subcommunity'  => $data['pf_subcommunity'] ?? null,
+            'pf_building'      => $data['pf_building'] ?? null,
+            'uae_emirate'      => $data['uae_emirate'] ?? null,
+            'latitude'         => $data['latitude'] ?? null,
+            'longitude'        => $data['longitude'] ?? null,
+            'price_currency'   => $data['price_currency'] ?? 'AED',
+
             // Initial status
             'status'           => PropertyFinderListing::STATUS_DRAFT,
         ];
