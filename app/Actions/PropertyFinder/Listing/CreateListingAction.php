@@ -308,8 +308,7 @@ class CreateListingAction
 
  private function buildPfPayload(array $data, ?User $agent, Company $company): array
 {
-        // $agentId = (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0));
-      $agentId = (int) ($data['agent_id'] ?? 0);
+      $agentId = $data['agent_id'];
     
     $listingType = $data['listing_type'] ?? 'sale';
     $rentFrequency = $data['rent_frequency'] ?? 'yearly';
@@ -364,10 +363,7 @@ class CreateListingAction
                 ], $data['images'] ?? []),
                 
                 // 🚀 THE FIX: (object) forces PHP to encode this as {} instead of []
-                'videos' => (object) array_filter([
-    'default' => $data['video_url'] ?? null,
-    'view360' => $data['virtual_tour'] ?? null,
-]),
+                'videos' => !empty($videoData) ? (object)$videoData : new \stdClass(),
             ],
             'mojDeedLocationDescription' => $data['moj_deed_location_description'] ?? null,
             'numberOfFloors' => (int) ($data['number_of_floors'] ?? 0),
