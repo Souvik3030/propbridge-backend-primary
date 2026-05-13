@@ -66,28 +66,40 @@ class PropertyFinderListingController extends Controller
 
         $requestedId = (int) ($validated['agent_id'] ?? 0);
 
-        // Find the agent in PF's live list by matching stored pf_user_id
-        // OR by matching the agent_id directly if it's already a PF ID
-        $matchedAgent = $liveAgents->firstWhere('id', $requestedId);
+        // Find the agent in PF's live list by matching:
+        // 1. root 'id' (account ID, e.g. 272007)
+        // 2. publicProfile.id (portal profile ID, e.g. 360223) — used by listing API for assignedTo/createdBy
+        $matchedAgent = $liveAgents->first(function ($a) use ($requestedId) {
+            if ((int) ($a['id'] ?? 0) === $requestedId) {
+                return true;
+            }
+            if ((int) ($a['publicProfile']['id'] ?? 0) === $requestedId) {
+                return true;
+            }
+            return false;
+        });
 
         if (!$matchedAgent) {
             return response()->json([
-                'message'       => "Agent ID {$requestedId} is not valid for your PropertyFinder account.",
-                'valid_agents'  => $liveAgents->map(fn($a) => [
-                    'pf_id' => $a['id'],
-                    'name'  => $a['name'] ?? $a['fullName'] ?? '—',
-                    'email' => $a['email'] ?? '—',
+                'message'      => "Agent ID {$requestedId} is not valid for your PropertyFinder account.",
+                'valid_agents' => $liveAgents->map(fn($a) => [
+                    'pf_id'            => $a['id'],
+                    'pf_profile_id'    => $a['publicProfile']['id'] ?? null,
+                    'name'             => $a['name'] ?? $a['fullName'] ?? '—',
+                    'email'            => $a['email'] ?? '—',
                 ])->values(),
             ], 422);
         }
 
-        // Store the confirmed PF user ID back into validated data
-        $validated['agent_id'] = (int) $matchedAgent['id'];
+        // Use publicProfile.id if available (this is what PF listing API expects for assignedTo/createdBy)
+        // Fall back to root id if publicProfile is not present
+        $pfAgentId = (int) ($matchedAgent['publicProfile']['id'] ?? $matchedAgent['id']);
+        $validated['agent_id'] = $pfAgentId;
 
         // Optional: persist pf_user_id on the local user record
         $localAgent = \App\Models\User::find($request->user()->id);
         if ($localAgent && empty($localAgent->pf_user_id)) {
-            $localAgent->update(['pf_user_id' => $matchedAgent['id']]);
+            $localAgent->update(['pf_user_id' => $pfAgentId]);
         }
 
     } catch (\Exception $e) {
