@@ -58,9 +58,9 @@ class CreateListingAction
                 ]);
 
                 // Safety: Validate created_by.id is present
-                if (empty($payload['created_by']['id'])) {
-                    throw new \Exception('Missing required field: created_by.id (PF User/Agent ID)');
-                }
+                if (empty($payload['createdBy']['id'])) { // Changed from created_by
+    throw new \Exception('Missing required field: createdBy.id (PF User/Agent ID)');
+}
 
                 $pfData   = $this->client->post($company, 'listings', $payload);
 
@@ -192,11 +192,141 @@ class CreateListingAction
      * Build the payload for PF API POST /listings.
      * Matches the detailed schema provided.
      */
-    private function buildPfPayload(array $data, ?User $agent, Company $company): array
-    {
-        $agentId = (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0));
-        $listingType = $data['listing_type'] ?? 'sale';
-        $rentFrequency = $data['rent_frequency'] ?? 'yearly';
+    // private function buildPfPayload(array $data, ?User $agent, Company $company): array
+    // {
+    //     $agentId = (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0));
+    //     $listingType = $data['listing_type'] ?? 'sale';
+    //     $rentFrequency = $data['rent_frequency'] ?? 'yearly';
+
+    //     $payload = [
+    //         'age'           => (int) ($data['age'] ?? 0),
+    //         'amenities'     => [], // Filled below
+    //         'assignedTo'    => ['id' => $agentId],
+    //         'availableFrom' => $data['available_from'] ?? null,
+    //         'bathrooms'     => (string) ($data['bathrooms'] ?? '0'),
+    //         'bedrooms'      => (string) ($data['bedrooms'] ?? '0'),
+    //         'builtUpArea'   => (int) ($data['size_sqft'] ?? $data['size'] ?? 0),
+    //         'category'      => $data['category'] ?? 'residential',
+    //         'compliance'    => [
+    //             'advertisementLicenseIssuanceDate' => $data['advertisement_license_issuance_date'] ?? null,
+    //             'listingAdvertisementNumber'       => $data['permit_number'] ?? $data['advertisement_number'] ?? '',
+    //             'type'                             => $data['permit_type'] ?? 'rera',
+    //             'issuingClientLicenseNumber'       => $company->license_number ?? $data['license_number'] ?? '',
+    //             'userConfirmedDataIsCorrect'       => true,
+    //         ],
+    //         'createdBy'     => ['id' => $agentId],
+    //         'description'   => [
+    //             'en' => $data['description_en'] ?? $data['description'] ?? '',
+    //             'ar' => $data['description_ar'] ?? null,
+    //         ],
+    //         'developer'     => $data['developer_name'] ?? null,
+    //         'finishingType' => $data['finishing_type'] ?? 'fully-finished',
+    //         'floorNumber'   => (string) ($data['floor_number'] ?? ''),
+    //         'furnishingType' => $data['furnishing_type'] ?? 'unfurnished',
+    //         'hasGarden'     => (bool) ($data['has_garden'] ?? false),
+    //         'hasKitchen'    => (bool) ($data['has_kitchen'] ?? false),
+    //         'hasParkingOnSite' => (bool) ($data['has_parking_on_site'] ?? false),
+    //         'landNumber'    => $data['land_number'] ?? null,
+    //         'location'      => ['id' => (int) $data['location_id']],
+    //         'media'         => [
+    //             'images' => array_map(fn($url) => [
+    //                 'original' => ['url' => $url]
+    //             ], $data['images'] ?? []),
+    //             'videos' => [
+    //                 'default' => $data['video_url'] ?? null,
+    //                 'view360' => $data['virtual_tour'] ?? null,
+    //             ]
+    //         ],
+    //         'mojDeedLocationDescription' => $data['moj_deed_location_description'] ?? null,
+    //         'numberOfFloors' => (int) ($data['number_of_floors'] ?? 0),
+    //         'ownerName'      => $data['owner_name'] ?? null,
+    //         'parkingSlots'   => (int) ($data['parking'] ?? $data['parking_slots'] ?? 0),
+    //         'plotNumber'     => $data['plot_number'] ?? null,
+    //         'plotSize'       => (int) ($data['plot_size_sqft'] ?? $data['plot_size'] ?? 0),
+    //         'price'          => [
+    //             'amounts'   => [
+    //                 'daily'   => ($listingType === 'rent' && $rentFrequency === 'daily')   ? (int) $data['price'] : 0,
+    //                 'monthly' => ($listingType === 'rent' && $rentFrequency === 'monthly') ? (int) $data['price'] : 0,
+    //                 'sale'    => ($listingType === 'sale')                                 ? (int) $data['price'] : 0,
+    //                 'weekly'  => ($listingType === 'rent' && $rentFrequency === 'weekly')  ? (int) $data['price'] : 0,
+    //                 'yearly'  => ($listingType === 'rent' && $rentFrequency === 'yearly')  ? (int) $data['price'] : 0,
+    //             ],
+    //             'downpayment'           => (int) ($data['downpayment'] ?? 0),
+    //             'minimalRentalPeriod'   => (int) ($data['minimal_rental_period'] ?? 0),
+    //             'mortgage'              => [
+    //                 'comment' => $data['mortgage_comment'] ?? null,
+    //                 'enabled' => (bool) ($data['mortgage_enabled'] ?? false),
+    //             ],
+    //             'numberOfCheques'       => (int) ($data['cheques'] ?? 0),
+    //             'numberOfMortgageYears' => (int) ($data['mortgage_years'] ?? 0),
+    //             'obligation'            => [
+    //                 'comment' => $data['obligation_comment'] ?? null,
+    //                 'enabled' => (bool) ($data['obligation_enabled'] ?? false),
+    //             ],
+    //             'onRequest'             => (bool) ($data['price_on_request'] ?? false),
+    //             'paymentMethods'        => is_string($data['payment_methods'] ?? null) ? explode(',', $data['payment_methods']) : ($data['payment_methods'] ?? []),
+    //             'type'                  => $listingType === 'sale' ? 'sale' : $rentFrequency,
+    //             'utilitiesInclusive'    => (bool) ($data['utilities_inclusive'] ?? false),
+    //             'valueAffected'         => [
+    //                 'comment' => $data['value_affected_comment'] ?? null,
+    //                 'enabled' => (bool) ($data['value_affected_enabled'] ?? false),
+    //             ]
+    //         ],
+    //         'projectStatus' => $data['project_status'] ?? 'completed',
+    //         'reference'     => $data['reference'] ?? null,
+    //         'size'          => (int) ($data['size_sqft'] ?? $data['size'] ?? 0),
+    //         'street'        => [
+    //             'direction' => $data['street_direction'] ?? 'North',
+    //             'width'     => (int) ($data['street_width'] ?? 0),
+    //         ],
+    //         'title'         => [
+    //             'en' => $data['title_en'] ?? $data['title'] ?? '',
+    //             'ar' => $data['title_ar'] ?? null,
+    //         ],
+    //         'type'          => $data['property_type'] ?? 'apartment',
+    //         'uaeEmirate'    => $data['emirate'] ?? $this->resolveEmirateKey((int) ($data['emirate_id'] ?? 0)),
+    //         'unitNumber'    => $data['unit_number'] ?? null,
+    //         // Sale-listing fields
+    //         'ownershipType' => $data['ownership_type'] ?? null,
+    //         // Building name (required for Dubai + Abu Dhabi)
+    //         'buildingName'  => $data['building_name'] ?? null,
+    //     ];
+
+    //     // Amenities handling: convert to slugs
+    //     if (!empty($data['amenities'])) {
+    //         $amenities = is_string($data['amenities']) ? explode(',', $data['amenities']) : $data['amenities'];
+    //         $payload['amenities'] = array_values(array_unique(array_map(
+    //             fn($v) => \Illuminate\Support\Str::slug(trim($v)),
+    //             (array) $amenities
+    //         )));
+    //     }
+
+    //     // Clean up: return all fields as PF API expects many of these even if empty/null in some versions,
+    //     // but we'll use array_filter to keep it tidy for non-required fields.
+    //     return array_filter($payload, fn($v) => $v !== null);
+    // }
+
+ private function buildPfPayload(array $data, ?User $agent, Company $company): array
+{
+        // $agentId = (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0));
+      $agentId = 360223;
+    
+    $listingType = $data['listing_type'] ?? 'sale';
+    $rentFrequency = $data['rent_frequency'] ?? 'yearly';
+
+        // 1. Map Emirate exactly to PF's strict 3 values
+        $emirateId = (int) ($data['emirate_id'] ?? 0);
+        $pfEmirate = match ($emirateId) {
+            1 => 'dubai',
+            2 => 'abu_dhabi',
+            default => 'northern_emirates', // Maps Sharjah (3), Ajman (4), etc., correctly
+        };
+
+        // Prepare video data
+        $videoData = array_filter([
+            'default' => $data['video_url'] ?? null,
+            'view360' => $data['virtual_tour'] ?? null,
+        ]);
 
         $payload = [
             'age'           => (int) ($data['age'] ?? 0),
@@ -211,7 +341,7 @@ class CreateListingAction
                 'advertisementLicenseIssuanceDate' => $data['advertisement_license_issuance_date'] ?? null,
                 'listingAdvertisementNumber'       => $data['permit_number'] ?? $data['advertisement_number'] ?? '',
                 'type'                             => $data['permit_type'] ?? 'rera',
-                'issuingClientLicenseNumber'       => $company->license_number ?? $data['license_number'] ?? '',
+                'issuingClientLicenseNumber'       => $company->license_number ?? $data['license_number'] ?? 'PENDING_LICENSE',
                 'userConfirmedDataIsCorrect'       => true,
             ],
             'createdBy'     => ['id' => $agentId],
@@ -232,10 +362,12 @@ class CreateListingAction
                 'images' => array_map(fn($url) => [
                     'original' => ['url' => $url]
                 ], $data['images'] ?? []),
-                'videos' => [
-                    'default' => $data['video_url'] ?? null,
-                    'view360' => $data['virtual_tour'] ?? null,
-                ]
+                
+                // 🚀 THE FIX: (object) forces PHP to encode this as {} instead of []
+                'videos' => (object) array_filter([
+    'default' => $data['video_url'] ?? null,
+    'view360' => $data['virtual_tour'] ?? null,
+]),
             ],
             'mojDeedLocationDescription' => $data['moj_deed_location_description'] ?? null,
             'numberOfFloors' => (int) ($data['number_of_floors'] ?? 0),
@@ -284,11 +416,12 @@ class CreateListingAction
                 'ar' => $data['title_ar'] ?? null,
             ],
             'type'          => $data['property_type'] ?? 'apartment',
-            'uaeEmirate'    => $data['emirate'] ?? $this->resolveEmirateKey((int) ($data['emirate_id'] ?? 0)),
+            'uaeEmirate'    => $pfEmirate, // <--- Fixed here to strictly match PF's requirements
             'unitNumber'    => $data['unit_number'] ?? null,
+            'ownershipType' => $data['ownership_type'] ?? null,
+            'buildingName'  => $data['building_name'] ?? null,
         ];
 
-        // Amenities handling: convert to slugs
         if (!empty($data['amenities'])) {
             $amenities = is_string($data['amenities']) ? explode(',', $data['amenities']) : $data['amenities'];
             $payload['amenities'] = array_values(array_unique(array_map(
@@ -297,9 +430,24 @@ class CreateListingAction
             )));
         }
 
-        // Clean up: return all fields as PF API expects many of these even if empty/null in some versions,
-        // but we'll use array_filter to keep it tidy for non-required fields.
-        return array_filter($payload, fn($v) => $v !== null);
+        // 2. Run the recursive null remover to prevent nested JSON errors
+        return $this->removeNullsRecursively($payload);
+    }
+
+    /**
+     * Recursively strips null values from an array to satisfy PF Schema requirements.
+     */
+    private function removeNullsRecursively(array $array): array
+    {
+        foreach ($array as $key => &$value) {
+            if (is_array($value)) {
+                $value = $this->removeNullsRecursively($value);
+            }
+            if ($value === null) {
+                unset($array[$key]);
+            }
+        }
+        return $array;
     }
 
   

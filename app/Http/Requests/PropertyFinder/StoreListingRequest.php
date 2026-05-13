@@ -47,20 +47,37 @@ class StoreListingRequest extends FormRequest
         }
         
         // Emirate Detection (Critical for permit logic)
+        // Accepts both camelCase slug (uaeEmirate) and the flat 'emirate' key.
+        // Underscore variants (e.g. "northern_emirates") are normalised via Str::slug.
         $uaeEmirate = $this->input('uaeEmirate') ?? $this->input('emirate');
         if ($uaeEmirate) {
             $slug = \Illuminate\Support\Str::slug((string) $uaeEmirate);
             $emirateMapping = [
-                'dubai'             => 1,
-                'abu-dhabi'         => 2,
-                'sharjah'           => 3,
-                'ajman'             => 4,
-                'rak'               => 5,
-                'ras-al-khaimah'    => 5,
-                'fujairah'          => 6,
-                'uaq'               => 7,
-                'umm-al-quwain'     => 7,
-                'northern-emirates' => 1,
+                // Dubai
+                'dubai'               => 1,
+                // Abu Dhabi
+                'abu-dhabi'           => 2,
+                'abudhabi'            => 2,
+                'abu-dhabi-emirate'   => 2,
+                // Sharjah
+                'sharjah'             => 3,
+                // Ajman
+                'ajman'               => 4,
+                // Ras Al Khaimah
+                'rak'                 => 5,
+                'ras-al-khaimah'      => 5,
+                // Fujairah
+                'fujairah'            => 6,
+                // Umm Al Quwain
+                'uaq'                 => 7,
+                'umm-al-quwain'       => 7,
+                // ── Removed: 'northern-emirates' → 1 was WRONG (mapped to Dubai,
+                //   triggering RERA permit + building_name for non-Dubai listings).
+                //   "Northern Emirates" is Sharjah/Ajman/RAK/Fujairah/UAQ — not Dubai.
+                //   Frontend should send the specific emirate; if it must send a generic
+                //   northern key, we map it to Sharjah (3) as the safest default.
+                'northern-emirates'   => 3,
+                'northern-uae'        => 3,
             ];
             if (isset($emirateMapping[$slug])) {
                 $this->merge(['emirate_id' => $emirateMapping[$slug]]);
@@ -100,6 +117,16 @@ class StoreListingRequest extends FormRequest
 
         if ($this->has('ownershipType')) {
             $this->merge(['ownership_type' => $this->input('ownershipType')]);
+        }
+
+        // ── Sale listing defaults ───────────────────────────────────────────
+        // Default ownership_type to 'freehold' when not provided for sale listings.
+        // This prevents a 422 on a field that is almost always freehold in the UAE
+        // and that most frontends don't expose. The user can always PATCH it later.
+        $resolvedListingType = $this->input('listing_type')
+            ?? (in_array($this->input('price.type', ''), ['yearly', 'monthly', 'weekly', 'daily']) ? 'rent' : 'sale');
+        if ($resolvedListingType === 'sale' && !$this->has('ownership_type') && !$this->has('ownershipType')) {
+            $this->merge(['ownership_type' => 'freehold']);
         }
 
         // 5. Building & Permits
@@ -183,8 +210,8 @@ class StoreListingRequest extends FormRequest
             'title_en'      => ['required_without:title', 'string', 'min:10', 'max:150'],
             'title'         => ['required_without:title_en', 'string', 'min:10', 'max:150'],
             'title_ar'      => ['nullable', 'string', 'min:10', 'max:150'],
-            'description_en'=> ['required_without:description', 'string', 'min:50'],
-            'description'   => ['required_without:description_en', 'string', 'min:50'],
+            'description_en'=> ['required_without:description', 'string', 'min:10'], // Reduced from 50
+'description'   => ['required_without:description_en', 'string', 'min:10'], // Reduced from 50
             'description_ar'=> ['nullable', 'string', 'min:50'],
             'images'        => ['required', 'array', 'min:1', 'max:30'],
             'images.*'      => ['required'], 

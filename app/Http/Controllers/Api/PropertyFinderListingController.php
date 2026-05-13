@@ -46,31 +46,64 @@ class PropertyFinderListingController extends Controller
         return PropertyFinderListingResource::collection($listings);
     }
 
-    /**
-     * Create a new listing (local draft + submit to PF API).
-     */
-    public function store(
-        StoreListingRequest $request,
-        CreateListingAction $action
-    ): JsonResponse {
-        $validated = $request->validated();
-        
-        // Find local user by pf_agent_id if integer provided, fallback to current user
-        $agent = \App\Models\User::where('company_id', $request->user()->company_id)
-            ->where('pf_agent_id', $validated['agent_id'])
-            ->first() ?? $request->user();
+   public function store(
+    StoreListingRequest $request,
+    CreateListingAction $action,
+    PropertyFinderApiClient $client
+): JsonResponse {
+    $validated = $request->validated();
+    $company   = $request->user()->company;
 
-        $listing = $action->execute(
-            $validated,
-            $request->user()->company,
-            $agent
-        );
+    try {
+        $liveResponse = $client->get($company, 'users');
+        $liveAgents   = collect($liveResponse['data'] ?? []);
 
+        if ($liveAgents->isEmpty()) {
+            return response()->json([
+                'message' => 'No active agents found in your PropertyFinder account.',
+            ], 422);
+        }
+
+        $requestedId = (int) ($validated['agent_id'] ?? 0);
+
+        // Find the agent in PF's live list by matching stored pf_user_id
+        // OR by matching the agent_id directly if it's already a PF ID
+        $matchedAgent = $liveAgents->firstWhere('id', $requestedId);
+
+        if (!$matchedAgent) {
+            return response()->json([
+                'message'       => "Agent ID {$requestedId} is not valid for your PropertyFinder account.",
+                'valid_agents'  => $liveAgents->map(fn($a) => [
+                    'pf_id' => $a['id'],
+                    'name'  => $a['name'] ?? $a['fullName'] ?? '—',
+                    'email' => $a['email'] ?? '—',
+                ])->values(),
+            ], 422);
+        }
+
+        // Store the confirmed PF user ID back into validated data
+        $validated['agent_id'] = (int) $matchedAgent['id'];
+
+        // Optional: persist pf_user_id on the local user record
+        $localAgent = \App\Models\User::find($request->user()->id);
+        if ($localAgent && empty($localAgent->pf_user_id)) {
+            $localAgent->update(['pf_user_id' => $matchedAgent['id']]);
+        }
+
+    } catch (\Exception $e) {
+        Log::error('PF agent verification failed', ['error' => $e->getMessage()]);
         return response()->json([
-            'message' => 'Listing created as draft. Run compliance check before publishing.',
-            'listing' => new PropertyFinderListingResource($listing),
-        ], 201);
+            'message' => 'PF Agent Verification Failed: ' . $e->getMessage(),
+        ], 500);
     }
+
+    $listing = $action->execute($validated, $company, $request->user());
+
+    return response()->json([
+        'message' => 'Listing created. Check validation_diffs for PF submission status.',
+        'listing' => new PropertyFinderListingResource($listing),
+    ], 201);
+}
 
     /**
      * Show listing details.
@@ -154,19 +187,20 @@ class PropertyFinderListingController extends Controller
      * Run local pre-validation (no PF API call).
      * Use this to check before creating or after a compliance failure.
      */
-    public function validate(
+   public function validate(
         PropertyFinderListing $listing,
         ValidateComplianceAction $validateAction
     ): JsonResponse {
         $this->authorize('view', $listing);
 
+        // Perform the validation check
         $result = $validateAction->execute($listing);
 
         return response()->json([
             'listing_id' => $listing->id,
-            'is_valid'   => $result['is_valid'],
-            'errors'     => $result['errors'],
-            'warnings'   => $result['warnings'],
+            'is_valid'   => $result['is_valid'] ?? false,
+            'errors'     => $result['errors'] ?? [],
+            'warnings'   => $result['warnings'] ?? [],
         ]);
     }
 
