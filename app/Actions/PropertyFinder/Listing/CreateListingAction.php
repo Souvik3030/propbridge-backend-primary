@@ -309,7 +309,7 @@ class CreateListingAction
  private function buildPfPayload(array $data, ?User $agent, Company $company): array
 {
         // $agentId = (int) (isset($data['agent_id']) ? $data['agent_id'] : ($agent?->pf_agent_id ?? 0));
-      $agentId = 360223;
+      $agentId = (int) ($data['agent_id'] ?? 0);
     
     $listingType = $data['listing_type'] ?? 'sale';
     $rentFrequency = $data['rent_frequency'] ?? 'yearly';
