@@ -254,11 +254,19 @@ class PropertyFinderListingController extends Controller
     }
 
     /**
-     * Delete a listing (soft delete — local only).
+     * Delete a listing (local and on Property Finder).
      */
-    public function destroy(PropertyFinderListing $listing): JsonResponse
+    public function destroy(PropertyFinderListing $listing, PropertyFinderApiClient $client): JsonResponse
     {
         $this->authorize('delete', $listing);
+
+        if ($listing->pf_id) {
+            try {
+                $client->delete($listing->company, 'listings/' . $listing->pf_id);
+            } catch (\Exception $e) {
+                Log::warning("Failed to delete listing {$listing->pf_id} from PF: " . $e->getMessage());
+            }
+        }
 
         $listing->delete();
 
