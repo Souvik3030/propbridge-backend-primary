@@ -92,33 +92,63 @@ class UpdateListingAction
 
             $listing->update($localData);
 
-            // If listing exists on PF and portal_pf is true, send PUT to PF API (full replace).
-            // NOTE: PATCH is broken on PF's side — their CDN rejects Bearer JWT with an
-            // HMAC error. PUT passes auth correctly and accepts partial fields too.
-            if ($listing->pf_id && $listing->portal_pf) {
+            // If portal_pf is true, send payload to PF API.
+            // If pf_id exists, we use PUT (full replace) to update.
+            // If pf_id is null (e.g. portal was just enabled), we use POST to create.
+            if ($listing->portal_pf) {
                 try {
-                    // Merge existing listing data with incoming changes for a full PUT payload.
+                    // Merge existing listing data with incoming changes for a full payload.
                     // Re-fresh listing to get latest local state after update().
                     $listing->refresh();
                     $pfPayload = $this->buildPfPutPayload($listing, $data, $pfAgentId);
 
-                    Log::info('PropertyFinder PUT payload', [
-                        'listing_id' => $listing->id,
-                        'pf_id'      => $listing->pf_id,
-                        'payload'    => $pfPayload,
-                    ]);
+                    if ($listing->pf_id) {
+                        Log::info('PropertyFinder PUT payload', [
+                            'listing_id' => $listing->id,
+                            'pf_id'      => $listing->pf_id,
+                            'payload'    => $pfPayload,
+                        ]);
 
-                    $this->client->put(
-                        $listing->company,
-                        "listings/{$listing->pf_id}",
-                        $pfPayload
-                    );
+                        $this->client->put(
+                            $listing->company,
+                            "listings/{$listing->pf_id}",
+                            $pfPayload
+                        );
 
-                    Log::info('PropertyFinder listing updated on PF API via PUT', [
-                        'listing_id'     => $listing->id,
-                        'pf_id'          => $listing->pf_id,
-                        'fields_updated' => array_keys($pfPayload),
-                    ]);
+                        Log::info('PropertyFinder listing updated on PF API via PUT', [
+                            'listing_id'     => $listing->id,
+                            'pf_id'          => $listing->pf_id,
+                            'fields_updated' => array_keys($pfPayload),
+                        ]);
+                    } else {
+                        Log::info('PropertyFinder POST payload (late creation via update)', [
+                            'listing_id' => $listing->id,
+                            'payload'    => $pfPayload,
+                        ]);
+
+                        if (empty($pfPayload['createdBy']['id'])) {
+                            throw new \Exception('Missing required field: createdBy.id (PF User/Agent ID)');
+                        }
+
+                        $pfData = $this->client->post(
+                            $listing->company,
+                            "listings",
+                            $pfPayload
+                        );
+
+                        $listing->update([
+                            'pf_id'            => $pfData['id'] ?? null,
+                            'pf_reference'     => $pfData['reference'] ?? null,
+                            'status'           => $pfData['status'] ?? PropertyFinderListing::STATUS_DRAFT,
+                            'validation_diffs' => null,
+                        ]);
+
+                        Log::info('PropertyFinder listing created on PF API via update', [
+                            'listing_id'   => $listing->id,
+                            'pf_id'        => $listing->pf_id,
+                            'pf_reference' => $listing->pf_reference,
+                        ]);
+                    }
 
                 } catch (\Throwable $e) {
                     Log::error('PropertyFinder listing PF API update failed', [
@@ -186,6 +216,12 @@ class UpdateListingAction
         $beds  = (string) ($listing->bedrooms ?? '0');
         $baths = (string) ($listing->bathrooms ?? '0');
 
+        // Prepare video data
+        $videoData = array_filter([
+            'default' => $data['video_url'] ?? $listing->video_url ?? null,
+            'view360' => $data['virtual_tour'] ?? $listing->virtual_tour ?? null,
+        ]);
+
         $payload = [
             'age'           => 0,
             'amenities'     => $this->resolveAmenities($data['amenities'] ?? $listing->amenities),
@@ -199,7 +235,7 @@ class UpdateListingAction
             'compliance'    => [
                 'listingAdvertisementNumber' => $listing->permit_number ?? '',
                 'type'                       => $listing->permit_type ?? 'rera',
-                'issuingClientLicenseNumber' => $listing->license_number ?? '',
+                'issuingClientLicenseNumber' => $listing->license_number ?? 'PENDING_LICENSE',
                 'userConfirmedDataIsCorrect' => true,
             ],
             'description'   => [
@@ -219,7 +255,7 @@ class UpdateListingAction
                     'original' => ['url' => $url],
                     'caption'  => '',
                 ], $images),
-                'videos' => new \stdClass(),
+                'videos' => !empty($videoData) ? (object)$videoData : new \stdClass(),
             ],
             'numberOfFloors'  => 0,
             'parkingSlots'    => (int) ($listing->parking ?? 0),
