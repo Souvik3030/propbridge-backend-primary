@@ -15,6 +15,8 @@ class PropertyFinderListing extends Model
 {
     use HasFactory, SoftDeletes, HasUuids;
 
+    protected $table = 'listings';
+
     // ─── PF API v2 Status Constants ────────────────────────────────────────────
     const STATUS_DRAFT             = 'draft';
     const STATUS_ACTIVE            = 'active';
@@ -126,6 +128,12 @@ class PropertyFinderListing extends Model
         'latitude',
         'longitude',
         'price_currency',
+        
+        // Portals
+        'portal_pf',
+        'portal_bayut',
+        'portal_dubizzle',
+        'portal_website',
     ];
 
     protected $casts = [
@@ -151,6 +159,10 @@ class PropertyFinderListing extends Model
         'location_id'              => 'integer',
         'is_exempt_area'           => 'boolean',
         'can_publish'              => 'boolean',
+        'portal_pf'                => 'boolean',
+        'portal_bayut'             => 'boolean',
+        'portal_dubizzle'          => 'boolean',
+        'portal_website'           => 'boolean',
     ];
 
     // ─── Relationships ──────────────────────────────────────────────────────────

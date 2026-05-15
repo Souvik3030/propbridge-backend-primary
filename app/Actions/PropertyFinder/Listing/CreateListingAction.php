@@ -42,55 +42,62 @@ class CreateListingAction
                 $this->buildLocalData($data, $company, $agent)
             );
 
-            // Step 3: Submit to PF API — POST /listings
-            try {
-                if (isset($data['images'])) {
-                    $data['images'] = $this->uploadImagesIfFiles($data['images']);
-                    $listing->update(['images' => $data['images']]);
+            // Step 2.5: Handle Image Uploads regardless of portal
+            if (isset($data['images'])) {
+                $data['images'] = $this->uploadImagesIfFiles($data['images']);
+                $listing->update(['images' => $data['images']]);
+            }
+
+            // Step 3: Submit to PF API — POST /listings (Only if PF is selected)
+            if ($listing->portal_pf) {
+                try {
+                    $payload  = $this->buildPfPayload($data, $agent, $company);
+
+                    // TEMPORARY: Log full payload for debugging
+                    Log::info('PropertyFinder listing creation payload', [
+                        'listing_id' => $listing->id,
+                        'payload'    => $payload
+                    ]);
+
+                    // Safety: Validate created_by.id is present
+                    if (empty($payload['createdBy']['id'])) {
+                        throw new \Exception('Missing required field: createdBy.id (PF User/Agent ID)');
+                    }
+
+                    $pfData   = $this->client->post($company, 'listings', $payload);
+
+                    // Step 4: Map PF response back to local record
+                    $listing->update([
+                        'pf_id'            => $pfData['id'] ?? null,
+                        'pf_reference'     => $pfData['reference'] ?? null,
+                        'status'           => $pfData['status'] ?? PropertyFinderListing::STATUS_DRAFT,
+                        'validation_diffs' => null, // Clear any previous errors
+                    ]);
+
+                    Log::info('PropertyFinder listing created and synced', [
+                        'listing_id'   => $listing->id,
+                        'pf_id'        => $listing->pf_id,
+                        'pf_reference' => $listing->pf_reference,
+                        'company_id'   => $company->id,
+                        'emirate_id'   => $data['emirate_id'] ?? null,
+                    ]);
+
+                } catch (\Throwable $e) {
+                    // PF API call failed — mark as draft with note, don't rollback DB record
+                    // (user can retry publishing later)
+                    Log::error('PropertyFinder listing creation on PF API failed', [
+                        'listing_id' => $listing->id,
+                        'error'      => $e->getMessage(),
+                    ]);
+
+                    $listing->update([
+                        'status'          => PropertyFinderListing::STATUS_COMPLIANCE_FAILED,
+                        'validation_diffs' => ['PF API submission failed: ' . $e->getMessage()],
+                    ]);
                 }
-                
-                $payload  = $this->buildPfPayload($data, $agent, $company);
-
-                // TEMPORARY: Log full payload for debugging
-                Log::info('PropertyFinder listing creation payload', [
+            } else {
+                Log::info('PropertyFinder listing creation skipped PF API because portal_pf is false', [
                     'listing_id' => $listing->id,
-                    'payload'    => $payload
-                ]);
-
-                // Safety: Validate created_by.id is present
-                if (empty($payload['createdBy']['id'])) { // Changed from created_by
-    throw new \Exception('Missing required field: createdBy.id (PF User/Agent ID)');
-}
-
-                $pfData   = $this->client->post($company, 'listings', $payload);
-
-                // Step 4: Map PF response back to local record
-                $listing->update([
-                    'pf_id'            => $pfData['id'] ?? null,
-                    'pf_reference'     => $pfData['reference'] ?? null,
-                    'status'           => $pfData['status'] ?? PropertyFinderListing::STATUS_DRAFT,
-                    'validation_diffs' => null, // Clear any previous errors
-                ]);
-
-                Log::info('PropertyFinder listing created and synced', [
-                    'listing_id'   => $listing->id,
-                    'pf_id'        => $listing->pf_id,
-                    'pf_reference' => $listing->pf_reference,
-                    'company_id'   => $company->id,
-                    'emirate_id'   => $data['emirate_id'] ?? null,
-                ]);
-
-            } catch (\Throwable $e) {
-                // PF API call failed — mark as draft with note, don't rollback DB record
-                // (user can retry publishing later)
-                Log::error('PropertyFinder listing creation on PF API failed', [
-                    'listing_id' => $listing->id,
-                    'error'      => $e->getMessage(),
-                ]);
-
-                $listing->update([
-                    'status'          => PropertyFinderListing::STATUS_COMPLIANCE_FAILED,
-                    'validation_diffs' => ['PF API submission failed: ' . $e->getMessage()],
                 ]);
             }
 
@@ -196,6 +203,12 @@ class CreateListingAction
 
             // Initial status
             'status'           => PropertyFinderListing::STATUS_DRAFT,
+            
+            // Portals
+            'portal_pf'        => $data['portal_pf'] ?? true,
+            'portal_bayut'     => $data['portal_bayut'] ?? false,
+            'portal_dubizzle'  => $data['portal_dubizzle'] ?? false,
+            'portal_website'   => $data['portal_website'] ?? false,
         ];
     }
 

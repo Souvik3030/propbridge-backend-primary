@@ -92,10 +92,10 @@ class UpdateListingAction
 
             $listing->update($localData);
 
-            // If listing exists on PF, send PUT to PF API (full replace).
+            // If listing exists on PF and portal_pf is true, send PUT to PF API (full replace).
             // NOTE: PATCH is broken on PF's side — their CDN rejects Bearer JWT with an
             // HMAC error. PUT passes auth correctly and accepts partial fields too.
-            if ($listing->pf_id) {
+            if ($listing->pf_id && $listing->portal_pf) {
                 try {
                     // Merge existing listing data with incoming changes for a full PUT payload.
                     // Re-fresh listing to get latest local state after update().
@@ -328,6 +328,7 @@ class UpdateListingAction
             'agent_id', 'emirate_id', 'uae_emirate', 'latitude', 'longitude',
             'pf_location_name', 'pf_city', 'pf_community', 'pf_subcommunity', 'pf_building',
             'price_currency',
+            'portal_pf', 'portal_bayut', 'portal_dubizzle', 'portal_website',
         ];
 
         return array_intersect_key($data, array_flip($allowed));

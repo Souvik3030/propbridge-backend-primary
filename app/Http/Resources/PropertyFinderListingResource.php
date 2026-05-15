@@ -109,6 +109,14 @@ class PropertyFinderListingResource extends JsonResource
             'unpublish_reason' => $this->unpublish_reason,
             'validation_diffs' => $this->validation_diffs ?? [],
 
+            // ── Portals ──────────────────────────────────────────────────────────
+            'portals' => [
+                'pf'       => (bool) ($this->portal_pf ?? true), // Default true for legacy rows
+                'bayut'    => (bool) $this->portal_bayut,
+                'dubizzle' => (bool) $this->portal_dubizzle,
+                'website'  => (bool) $this->portal_website,
+            ],
+
             // Compliance snapshot only visible to admins (contains permit details)
             'compliance_snapshot' => $this->when($isAdmin, $this->compliance_snapshot),
 

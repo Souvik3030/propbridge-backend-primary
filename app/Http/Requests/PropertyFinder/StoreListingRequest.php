@@ -163,6 +163,17 @@ class StoreListingRequest extends FormRequest
                 'amenities' => array_map(fn($v) => is_string($v) ? str_replace('_', '-', $v) : $v, $this->amenities)
             ]);
         }
+
+        // 8. Portals
+        if ($this->has('portals') && is_array($this->input('portals'))) {
+            $portals = $this->input('portals');
+            $this->merge([
+                'portal_pf'       => filter_var($portals['pf'] ?? true, FILTER_VALIDATE_BOOLEAN),
+                'portal_bayut'    => filter_var($portals['bayut'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                'portal_dubizzle' => filter_var($portals['dubizzle'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                'portal_website'  => filter_var($portals['website'] ?? false, FILTER_VALIDATE_BOOLEAN),
+            ]);
+        }
     }
 
     public function rules(): array
@@ -311,6 +322,12 @@ class StoreListingRequest extends FormRequest
             'project_status'  => ['nullable', Rule::in([
                 'off_plan', 'off_plan_primary', 'completed', 'completed_primary', 'off_plan_under_construction'
             ])],
+            
+            // Portals
+            'portal_pf'       => ['nullable', 'boolean'],
+            'portal_bayut'    => ['nullable', 'boolean'],
+            'portal_dubizzle' => ['nullable', 'boolean'],
+            'portal_website'  => ['nullable', 'boolean'],
         ];
     }
 

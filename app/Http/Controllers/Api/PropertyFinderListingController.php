@@ -55,59 +55,59 @@ class PropertyFinderListingController extends Controller
     $validated = $request->validated();
     $company   = $request->user()->company;
 
-    try {
-        $liveResponse = $client->get($company, 'users');
-        $liveAgents   = collect($liveResponse['data'] ?? []);
+    $portalPf = $validated['portal_pf'] ?? true;
 
-        if ($liveAgents->isEmpty()) {
-            return response()->json([
-                'message' => 'No active agents found in your PropertyFinder account.',
-            ], 422);
-        }
+    if ($portalPf) {
+        try {
+            $liveResponse = $client->get($company, 'users');
+            $liveAgents   = collect($liveResponse['data'] ?? []);
 
-        $requestedId = (int) ($validated['agent_id'] ?? 0);
-
-        // Find the agent in PF's live list by matching:
-        // 1. root 'id' (account ID, e.g. 272007)
-        // 2. publicProfile.id (portal profile ID, e.g. 360223) — used by listing API for assignedTo/createdBy
-        $matchedAgent = $liveAgents->first(function ($a) use ($requestedId) {
-            if ((int) ($a['id'] ?? 0) === $requestedId) {
-                return true;
+            if ($liveAgents->isEmpty()) {
+                return response()->json([
+                    'message' => 'No active agents found in your PropertyFinder account.',
+                ], 422);
             }
-            if ((int) ($a['publicProfile']['id'] ?? 0) === $requestedId) {
-                return true;
+
+            $requestedId = (int) ($validated['agent_id'] ?? 0);
+
+            // Find the agent in PF's live list
+            $matchedAgent = $liveAgents->first(function ($a) use ($requestedId) {
+                if ((int) ($a['id'] ?? 0) === $requestedId) {
+                    return true;
+                }
+                if ((int) ($a['publicProfile']['id'] ?? 0) === $requestedId) {
+                    return true;
+                }
+                return false;
+            });
+
+            if (!$matchedAgent) {
+                return response()->json([
+                    'message'      => "Agent ID {$requestedId} is not valid for your PropertyFinder account.",
+                    'valid_agents' => $liveAgents->map(fn($a) => [
+                        'pf_id'            => $a['id'],
+                        'pf_profile_id'    => $a['publicProfile']['id'] ?? null,
+                        'name'             => $a['name'] ?? $a['fullName'] ?? '—',
+                        'email'            => $a['email'] ?? '—',
+                    ])->values(),
+                ], 422);
             }
-            return false;
-        });
 
-        if (!$matchedAgent) {
+            $pfAgentId = (int) ($matchedAgent['publicProfile']['id'] ?? $matchedAgent['id']);
+            $validated['agent_id'] = $pfAgentId;
+
+            // Optional: persist pf_agent_id on the local user record if not set
+            $localAgent = \App\Models\User::find($request->user()->id);
+            if ($localAgent && empty($localAgent->pf_agent_id)) {
+                $localAgent->update(['pf_agent_id' => $pfAgentId]);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('PF agent verification failed', ['error' => $e->getMessage()]);
             return response()->json([
-                'message'      => "Agent ID {$requestedId} is not valid for your PropertyFinder account.",
-                'valid_agents' => $liveAgents->map(fn($a) => [
-                    'pf_id'            => $a['id'],
-                    'pf_profile_id'    => $a['publicProfile']['id'] ?? null,
-                    'name'             => $a['name'] ?? $a['fullName'] ?? '—',
-                    'email'            => $a['email'] ?? '—',
-                ])->values(),
-            ], 422);
+                'message' => 'PF Agent Verification Failed: ' . $e->getMessage(),
+            ], 500);
         }
-
-        // Use publicProfile.id if available (this is what PF listing API expects for assignedTo/createdBy)
-        // Fall back to root id if publicProfile is not present
-        $pfAgentId = (int) ($matchedAgent['publicProfile']['id'] ?? $matchedAgent['id']);
-        $validated['agent_id'] = $pfAgentId;
-
-        // Optional: persist pf_agent_id on the local user record if not set
-        $localAgent = \App\Models\User::find($request->user()->id);
-        if ($localAgent && empty($localAgent->pf_agent_id)) {
-            $localAgent->update(['pf_agent_id' => $pfAgentId]);
-        }
-
-    } catch (\Exception $e) {
-        Log::error('PF agent verification failed', ['error' => $e->getMessage()]);
-        return response()->json([
-            'message' => 'PF Agent Verification Failed: ' . $e->getMessage(),
-        ], 500);
     }
 
     $listing = $action->execute($validated, $company, $request->user());
@@ -194,7 +194,9 @@ class PropertyFinderListingController extends Controller
         $requestedAgentId = $validated['agent_id'] ?? $request->input('assignedTo.id');
 
         // If an agent is specified in the PATCH, verify and map it to the LOCAL user
-        if ($requestedAgentId) {
+        $portalPf = $validated['portal_pf'] ?? $listing->portal_pf;
+        
+        if ($requestedAgentId && $portalPf) {
             try {
                 $liveAgents = collect($client->get($listing->company, 'users')['data'] ?? []);
                 $requestedId = (int) $requestedAgentId;
@@ -216,7 +218,6 @@ class PropertyFinderListingController extends Controller
                                              ->first();
 
                 // IMPORTANT: The Action expects the LOCAL user ID, not the PF ID.
-                // This resolves the "Could not resolve agent_id" warning.
                 if ($localUser) {
                     $validated['agent_id'] = $localUser->id;
                 } else {
@@ -235,6 +236,11 @@ class PropertyFinderListingController extends Controller
                 Log::error('PF agent verification failed on update', ['error' => $e->getMessage()]);
                 return response()->json(['message' => 'Agent verification failed: ' . $e->getMessage()], 500);
             }
+        } elseif ($requestedAgentId) {
+            // If we are NOT checking PF (portal_pf is false), just map assignedTo directly to agent_id 
+            // assuming the frontend passed a valid local user ID or PF ID. 
+            // It's safer to just set agent_id.
+            unset($validated['assignedTo']);
         }
 
         // 2. Sanitize Payload for PATCH
@@ -283,6 +289,12 @@ class PropertyFinderListingController extends Controller
         LogComplianceCheckAction $logAction
     ): JsonResponse {
         $this->authorize('view', $listing);
+
+        if (!$listing->portal_pf) {
+            return response()->json([
+                'message' => 'PropertyFinder is not selected for this listing. Compliance checks are not available.'
+            ], 400);
+        }
 
         $updatedListing = $checkAction->execute($listing);
 
@@ -340,6 +352,12 @@ class PropertyFinderListingController extends Controller
         PublishListingAction $action
     ): JsonResponse {
         $this->authorize('update', $listing);
+
+        if (!$listing->portal_pf) {
+            return response()->json([
+                'message' => 'Cannot publish to PropertyFinder because it is not selected for this listing.'
+            ], 400);
+        }
 
         $publishedListing = $action->execute($listing);
 
