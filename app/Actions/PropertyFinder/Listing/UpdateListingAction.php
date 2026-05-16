@@ -262,11 +262,11 @@ class UpdateListingAction
             'plotSize'        => (int) ($listing->plot_size_sqft ?? 0),
             'price'           => [
                 'amounts' => [
-                    'daily'   => ($listingType === 'rent' && $rentFrequency === 'daily')   ? $price : 0,
-                    'monthly' => ($listingType === 'rent' && $rentFrequency === 'monthly') ? $price : 0,
-                    'sale'    => ($listingType === 'sale')                                  ? $price : 0,
-                    'weekly'  => ($listingType === 'rent' && $rentFrequency === 'weekly')   ? $price : 0,
-                    'yearly'  => ($listingType === 'rent' && $rentFrequency === 'yearly')   ? $price : 0,
+                    'daily'   => ($listingType === 'rent' && $rentFrequency === 'daily')   ? $price : null,
+                    'monthly' => ($listingType === 'rent' && $rentFrequency === 'monthly') ? $price : null,
+                    'sale'    => ($listingType === 'sale')                                  ? $price : null,
+                    'weekly'  => ($listingType === 'rent' && $rentFrequency === 'weekly')   ? $price : null,
+                    'yearly'  => ($listingType === 'rent' && $rentFrequency === 'yearly')   ? $price : null,
                 ],
                 'downpayment'     => 0,
                 'mortgage'        => ['comment' => null, 'enabled' => false],
@@ -299,11 +299,11 @@ class UpdateListingAction
                 ? ($data['rent_frequency'] ?? $rentFrequency)
                 : 'sale';
             $payload['price']['amounts'] = [
-                'daily'   => ($newType === 'daily')   ? $newPrice : 0,
-                'monthly' => ($newType === 'monthly') ? $newPrice : 0,
-                'sale'    => ($newType === 'sale')    ? $newPrice : 0,
-                'weekly'  => ($newType === 'weekly')  ? $newPrice : 0,
-                'yearly'  => ($newType === 'yearly')  ? $newPrice : 0,
+                'daily'   => ($newType === 'daily')   ? $newPrice : null,
+                'monthly' => ($newType === 'monthly') ? $newPrice : null,
+                'sale'    => ($newType === 'sale')    ? $newPrice : null,
+                'weekly'  => ($newType === 'weekly')  ? $newPrice : null,
+                'yearly'  => ($newType === 'yearly')  ? $newPrice : null,
             ];
             $payload['price']['type'] = $newType;
         }

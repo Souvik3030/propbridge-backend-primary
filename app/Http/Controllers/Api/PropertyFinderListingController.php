@@ -246,16 +246,63 @@ class PropertyFinderListingController extends Controller
         // 2. Sanitize Payload for PATCH
         // Strip read-only or complex nested objects sent by the frontend. 
         // Passing these causes the PF API HMAC signature calculation to fail and throw the 403 Auth error.
-        $readOnlyFields = ['media', 'location', 'createdBy', 'uaeEmirate'];
+        $readOnlyFields = ['media', 'location', 'createdBy', 'uaeEmirate', 'assignedTo', 'status'];
         foreach ($readOnlyFields as $field) {
             unset($validated[$field]);
         }
 
-        $updatedListing = $action->execute($listing, $validated);
+        // 3. If unpublishing, do it BEFORE the update to avoid PF API state machine conflict
+        // (If we PUT changes to a Live listing, it enters 'validation_requested', which blocks unpublish)
+        $newStatus = $request->input('status');
+        $normalizedStatus = $newStatus ? strtolower($newStatus) : null;
+        
+        if ($normalizedStatus && in_array($normalizedStatus, ['unpublish', 'save as draft', 'archived'])) {
+            if ($listing->portal_pf && $listing->pf_id && $listing->status === \App\Models\PropertyFinderListing::STATUS_ACTIVE) {
+                try {
+                    $listing = app(\App\Actions\PropertyFinder\Listing\UnpublishListingAction::class)->execute($listing);
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Status update via save failed (unpublish)', ['error' => $e->getMessage()]);
+                    return response()->json([
+                        'message' => 'Failed to unpublish listing on Property Finder: ' . $e->getMessage(),
+                        'listing' => new PropertyFinderListingResource($listing),
+                    ], 422);
+                }
+            }
+        }
+
+        // 4. Perform the actual data update (PATCH/PUT)
+        $listing = $action->execute($listing, $validated);
+
+        // 5. Update local status for draft/archived if requested
+        if ($normalizedStatus && in_array($normalizedStatus, ['save as draft', 'archived', 'draft'])) {
+             $localStatusMap = [
+                 'save as draft' => \App\Models\PropertyFinderListing::STATUS_DRAFT,
+                 'draft'         => \App\Models\PropertyFinderListing::STATUS_DRAFT,
+                 'archived'      => \App\Models\PropertyFinderListing::STATUS_ARCHIVED,
+             ];
+             if (isset($localStatusMap[$normalizedStatus])) {
+                 $listing->update(['status' => $localStatusMap[$normalizedStatus]]);
+             }
+        }
+
+        // 6. If publishing, do it AFTER the update so the latest data goes live
+        if ($normalizedStatus && $normalizedStatus === 'live') {
+            if ($listing->portal_pf && $listing->pf_id && !in_array($listing->status, [\App\Models\PropertyFinderListing::STATUS_ACTIVE, \App\Models\PropertyFinderListing::STATUS_UNDER_REVIEW])) {
+                try {
+                    $listing = app(\App\Actions\PropertyFinder\Listing\PublishListingAction::class)->execute($listing);
+                } catch (\Exception $e) {
+                    \Illuminate\Support\Facades\Log::error('Status update via save failed (publish)', ['error' => $e->getMessage()]);
+                    return response()->json([
+                        'message' => 'Listing updated locally, but failed to publish on Property Finder: ' . $e->getMessage(),
+                        'listing' => new PropertyFinderListingResource($listing),
+                    ], 422);
+                }
+            }
+        }
 
         return response()->json([
             'message' => 'Listing updated successfully.',
-            'listing' => new PropertyFinderListingResource($updatedListing),
+            'listing' => new PropertyFinderListingResource($listing),
         ]);
     }
 

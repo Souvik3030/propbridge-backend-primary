@@ -397,11 +397,11 @@ class CreateListingAction
             'plotSize'       => (int) ($data['plot_size_sqft'] ?? $data['plot_size'] ?? 0),
             'price'          => [
                 'amounts'   => [
-                    'daily'   => ($listingType === 'rent' && $rentFrequency === 'daily')   ? (int) $data['price'] : 0,
-                    'monthly' => ($listingType === 'rent' && $rentFrequency === 'monthly') ? (int) $data['price'] : 0,
-                    'sale'    => ($listingType === 'sale')                                 ? (int) $data['price'] : 0,
-                    'weekly'  => ($listingType === 'rent' && $rentFrequency === 'weekly')  ? (int) $data['price'] : 0,
-                    'yearly'  => ($listingType === 'rent' && $rentFrequency === 'yearly')  ? (int) $data['price'] : 0,
+                    'daily'   => ($listingType === 'rent' && $rentFrequency === 'daily')   ? (int) $data['price'] : null,
+                    'monthly' => ($listingType === 'rent' && $rentFrequency === 'monthly') ? (int) $data['price'] : null,
+                    'sale'    => ($listingType === 'sale')                                 ? (int) $data['price'] : null,
+                    'weekly'  => ($listingType === 'rent' && $rentFrequency === 'weekly')  ? (int) $data['price'] : null,
+                    'yearly'  => ($listingType === 'rent' && $rentFrequency === 'yearly')  ? (int) $data['price'] : null,
                 ],
                 'downpayment'           => (int) ($data['downpayment'] ?? 0),
                 'minimalRentalPeriod'   => (int) ($data['minimal_rental_period'] ?? 0),

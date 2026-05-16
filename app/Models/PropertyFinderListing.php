@@ -22,6 +22,7 @@ class PropertyFinderListing extends Model
     const STATUS_ACTIVE            = 'active';
     const STATUS_UNDER_REVIEW      = 'under_review';
     const STATUS_INACTIVE          = 'inactive';
+    const STATUS_ARCHIVED          = 'archived';
     const STATUS_COMPLIANCE_FAILED = 'compliance_failed';
 
     // ─── Listing Type Constants ─────────────────────────────────────────────────
