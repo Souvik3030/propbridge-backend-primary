@@ -12,11 +12,15 @@ use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Api\CompanyController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\OffplanProjectController;
+use App\Http\Controllers\Api\DeveloperController;
+use App\Http\Controllers\Api\MarketIntelligenceController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\SuperadminDashboardController;
 use App\Http\Controllers\Api\ImpersonationController;
 use App\Http\Controllers\Api\PropertyFinderListingController;
 use App\Http\Controllers\Api\PermissionController;
+use App\Http\Controllers\Api\MarketAnalyticsController;
 // --- MIDDLEWARE ---
 use App\Http\Middleware\CheckCompanyStatus;
 use Illuminate\Session\Middleware\StartSession;
@@ -24,8 +28,48 @@ use Illuminate\Session\Middleware\StartSession;
 // ==========================================
 // 🌐 PUBLIC ROUTES
 // ==========================================
+
+// ── Legacy endpoints (kept for backward compatibility) ────────────────────
 Route::post('/new_projects_search', [ProjectController::class, 'search']);
 Route::get('/locations_search', [ProjectController::class, 'locations']);
+Route::get('/dld-transactions', [\App\Http\Controllers\Api\DldProjectController::class, 'index']);
+
+// ==========================================
+// 🚀 API V1 — Off-Plan Projects & Market Intelligence
+// ==========================================
+Route::prefix('v1')->group(function () {
+
+    // ── Projects ─────────────────────────────────────────────────────────
+    Route::prefix('projects')->group(function () {
+        Route::get('/',               [OffplanProjectController::class, 'search']);    // GET  /api/v1/projects
+        Route::post('/search',        [OffplanProjectController::class, 'search']);    // POST /api/v1/projects/search
+        Route::get('/filter-options', [OffplanProjectController::class, 'filterOptions']); // GET /api/v1/projects/filter-options
+        Route::get('/locations',      [OffplanProjectController::class, 'locations']); // GET  /api/v1/projects/locations
+        Route::get('/{id}',           [OffplanProjectController::class, 'show']);      // GET  /api/v1/projects/{id}
+    });
+
+    // ── Developers ───────────────────────────────────────────────────────
+    Route::prefix('developers')->group(function () {
+        Route::get('/',      [DeveloperController::class, 'index']); // GET /api/v1/developers
+        Route::get('/{id}',  [DeveloperController::class, 'show']);  // GET /api/v1/developers/{id}
+    });
+
+    // ── Market Intelligence / Analytics ───────────────────────────────────
+    Route::prefix('analytics')->group(function () {
+        Route::get('/market-summary',         [MarketIntelligenceController::class, 'marketSummary']);
+        Route::get('/distributions',          [MarketIntelligenceController::class, 'distributions']);
+        Route::get('/top-areas',              [MarketIntelligenceController::class, 'topAreas']);
+        Route::get('/hottest-projects',       [MarketIntelligenceController::class, 'hottestProjects']);
+        Route::get('/active-rera-projects',   [MarketIntelligenceController::class, 'activeReraProjects']);
+        Route::get('/registered-developers',  [MarketIntelligenceController::class, 'registeredDevelopers']);
+        // Internal cache-clear utility (protect behind IP whitelist or admin auth in prod)
+        Route::post('/cache/clear',           [MarketIntelligenceController::class, 'clearCache']);
+    });
+
+    // ── Market Page Analytics ─────────────────────────────────────────────
+    Route::get('/market-analytics', [MarketAnalyticsController::class, 'getAnalytics']);
+    Route::get('/market-analytics/export', [MarketAnalyticsController::class, 'export']);
+});
 
 Route::get('/load-test-companies', function () {
     return Cache::remember('load_test_results', 600, function () {

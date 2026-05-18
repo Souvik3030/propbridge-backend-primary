@@ -13,41 +13,93 @@ class ProjectResource extends JsonResource
         $photos = $this->images->pluck('url');
 
         return [
-            "id" => $this->source_id,
-            "name" => $this->title,
-            "price" => [
-                "min" => $this->price,
-                "max" => $this->price_max ?? $this->price 
-            ],
-            "rooms" => $this->bedrooms ? [$this->bedrooms] : [],
-            "category" => [
-                "main" => $this->type_main,
-                "sub" => $this->type_sub,
-            ],
-            "location" => [
-                "city" => ["name" => $this->location->city ?? null],
-                "community" => ["name" => $this->location->community ?? null],
-                "sub_community" => ["name" => $this->location->sub_community ?? null],
-                "coordinates" => [
-                    "lat" => $this->location->lat ?? null,
-                    "lng" => $this->location->lng ?? null
-                ]
-            ],
-            "developer" => $this->whenLoaded('developer', fn () => [
-                "id" => $this->developer->source_id,
-                "name" => $this->developer->name,
-                "logo_url" => $this->developer->logo
+            // ── Identity ──────────────────────────────────────────────────────
+            'id'    => $this->id,
+            'name'  => $this->title,
+            'title' => $this->title,
+
+            // ── Developer ─────────────────────────────────────────────────────
+            'developer' => $this->whenLoaded('developer', fn() => [
+                'id'       => $this->developer->source_id,
+                'name'     => $this->developer->name,
+                'logo_url' => $this->developer->logo,
             ]),
-            
-            "media" => [
-                // 🚀 Optimized: Using the pre-extracted collection
-                "cover_photo" => $photos->first(),
-                "photos" => $photos->values()
+
+            // ── Price ─────────────────────────────────────────────────────────
+            'price' => [
+                'min' => (float) $this->price,
+                'max' => (float) ($this->price_max ?? $this->price),
             ],
-            
-            "amenities" => $this->amenities ?? [],
-            "payment_plan" => $this->payment_plans ?? [],
-            "completion_status" => $this->purpose ?? "under-construction",
+
+            // ── Type / Category ───────────────────────────────────────────────
+            'category' => [
+                'main' => $this->type_main,
+                'sub'  => $this->type_sub,
+            ],
+            'type' => [
+                'main' => $this->type_main,
+                'sub'  => $this->type_sub,
+            ],
+
+            // ── Area ─────────────────────────────────────────────────────────
+            'area' => [
+                'min'      => $this->area_min,
+                'max'      => $this->area_max,
+                'built_up' => $this->area_built_up,
+                'unit'     => 'sqft',
+            ],
+
+            // ── Bedrooms / Rooms ──────────────────────────────────────────────
+            'rooms'    => $this->rooms ?? ($this->bedrooms !== null ? [$this->bedrooms] : []),
+            'bedrooms' => $this->bedrooms,
+
+            // ── Units ────────────────────────────────────────────────────────
+            'units_count' => $this->units_count,
+
+            // ── Location ─────────────────────────────────────────────────────
+            'location' => [
+                'city'          => ['name' => $this->location->city ?? null],
+                'community'     => ['name' => $this->location->community ?? null],
+                'sub_community' => ['name' => $this->location->sub_community ?? null],
+                'coordinates'   => [
+                    'lat' => $this->location->lat ?? null,
+                    'lng' => $this->location->lng ?? null,
+                ],
+            ],
+
+            // ── Media ────────────────────────────────────────────────────────
+            'media' => [
+                'cover_photo' => $photos->first(),
+                'photos'      => $photos->values(),
+            ],
+
+            // ── Documents ────────────────────────────────────────────────────
+            'documents' => $this->documents ?? [],
+
+            // ── Status ───────────────────────────────────────────────────────
+            'status' => [
+                'completion_status' => $this->completion_status ?? $this->purpose,
+                'completion_date'   => $this->completion_date?->format('Y-m-d'),
+            ],
+            'completion_status' => $this->completion_status ?? $this->purpose,
+
+            // ── Payment Plan ─────────────────────────────────────────────────
+            'payment_plan' => $this->payment_plans ?? [],
+
+            // ── Amenities ────────────────────────────────────────────────────
+            'amenities' => $this->amenities ?? [],
+
+            // ── Analytics ────────────────────────────────────────────────────
+            'analytics' => [
+                'score'                 => $this->investment_score,
+                'dldAvgPriceSqft'       => $this->dld_avg_price_sqft,
+                'dldTransactionsCount'  => $this->dld_transactions_count,
+                'estimatedYield'        => $this->estimated_yield,
+            ],
+
+            // ── Timestamps ───────────────────────────────────────────────────
+            'created_at' => $this->created_at?->toISOString(),
+            'updated_at' => $this->updated_at?->toISOString(),
         ];
     }
 }

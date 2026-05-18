@@ -11,6 +11,12 @@ use App\Http\Resources\ProjectResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
+/**
+ * Legacy controller kept for backward compatibility with
+ * POST /new_projects_search  and  GET /locations_search
+ *
+ * New clients should use the v1 endpoints via OffplanProjectController.
+ */
 class ProjectController extends Controller
 {
     public function search(Request $request, SearchProjectsAction $action)
@@ -19,13 +25,12 @@ class ProjectController extends Controller
         return ProjectResource::collection($paginatedProjects);
     }
 
-    // 🔥 FAANG STANDARD: Clean Traffic Cop!
     public function locations(Request $request, SearchLocationsAction $action): JsonResponse
     {
         $locations = $action->execute($request->query('query'));
-        
+
         return response()->json([
-            "results" => ProjectLocationResource::collection($locations)
+            'results' => ProjectLocationResource::collection($locations)
         ]);
     }
 }

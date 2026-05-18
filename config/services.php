@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'bayut' => [
+        'key' => env('BAYUT_OFFPLAN_API_KEY'),
+        'host' => env('BAYUT_OFFPLAN_API_HOST'),
+    ],
+
 ];
