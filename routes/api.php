@@ -21,6 +21,7 @@ use App\Http\Controllers\Api\ImpersonationController;
 use App\Http\Controllers\Api\PropertyFinderListingController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\MarketAnalyticsController;
+use App\Http\Controllers\Api\DashboardController;
 // --- MIDDLEWARE ---
 use App\Http\Middleware\CheckCompanyStatus;
 use Illuminate\Session\Middleware\StartSession;
@@ -98,6 +99,7 @@ Route::middleware(StartSession::class)->prefix('auth')->group(function () {
         // Session & Profile
         Route::get('/me', [AuthController::class, 'me']);
         Route::post('/logout', [AuthController::class, 'logout']);
+        Route::get('/v1/dashboard', [DashboardController::class, 'index']);
         Route::post('/email/verification-notification', [VerificationController::class, 'resend'])->middleware('throttle:6,1');
 
         // ■■■ SUPERADMIN: COMPANIES & DASHBOARD ■■■

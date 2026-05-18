@@ -1,5 +1,10 @@
 <?php
 
+require __DIR__ . '/vendor/autoload.php';
+$app = require_once __DIR__ . '/bootstrap/app.php';
+$kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
+$kernel->bootstrap();
+
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Crypt;
 
@@ -21,8 +26,8 @@ foreach ($companies as $company) {
             try {
                 // Try to decrypt. If it succeeds, it's already encrypted properly.
                 Crypt::decrypt($value);
-            } catch (\Illuminate\Contracts\Encryption\DecryptException $e) {
-                // If it fails, it's plaintext. We must encrypt it.
+            } catch (\Throwable $e) {
+                // If it fails, it's plaintext or corrupt. We must encrypt it.
                 $updateData[$field] = Crypt::encrypt($value);
             }
         }
