@@ -12,6 +12,8 @@ class HotAreasDealsController extends Controller
 {
     public function index(Request $request)
     {
+        set_time_limit(0); // Prevent timeout when fetching all records
+        
         $startDate = $request->input('start_date', Carbon::now()->subDays(30)->toDateString());
         $endDate = $request->input('end_date', Carbon::now()->toDateString());
 
