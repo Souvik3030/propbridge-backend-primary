@@ -39,6 +39,40 @@ class DeveloperController extends Controller
                 'per_page'     => $developers->perPage(),
                 'total'        => $developers->total(),
                 'last_page'    => $developers->lastPage(),
+                'from'         => $developers->firstItem(),
+                'to'           => $developers->lastItem(),
+            ],
+            'links' => [
+                'first' => $developers->url(1),
+                'last'  => $developers->url($developers->lastPage()),
+                'prev'  => $developers->previousPageUrl(),
+                'next'  => $developers->nextPageUrl(),
+            ],
+        ]);
+    }
+
+    /**
+     * GET /api/v1/developers/all
+     *
+     * Full developer list for frontend filters/dropdowns.
+     */
+    public function all(Request $request): JsonResponse
+    {
+        $query = OffplanDeveloper::query();
+
+        if ($search = $request->query('search')) {
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        $developers = $query
+            ->orderByDesc('project_count')
+            ->orderBy('name')
+            ->get();
+
+        return response()->json([
+            'data' => DeveloperResource::collection($developers),
+            'meta' => [
+                'total' => $developers->count(),
             ],
         ]);
     }

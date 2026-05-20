@@ -130,7 +130,9 @@ class SearchProjectsAction
             default                                     => $query->latest(),
         };
 
-        $perPage = min((int) ($filters['per_page'] ?? 20), 100);
-        return $query->paginate($perPage);
+        $perPage = min(max((int) ($filters['per_page'] ?? 20), 1), 100);
+        $page = max((int) ($filters['page'] ?? 1), 1);
+
+        return $query->paginate($perPage, ['*'], 'page', $page);
     }
 }

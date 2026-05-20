@@ -1,0 +1,55 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: propbridge-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: propbridge
+      MYSQL_USER: myuser
+      MYSQL_PASSWORD: secret
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - propbridge_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: propbridge-phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: myuser
+      PMA_PASSWORD: secret
+      UPLOAD_LIMIT: 128M
+    ports:
+      - "9090:80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: propbridge-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - propbridge_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  propbridge_mysql_data:
+  propbridge_redis_data:

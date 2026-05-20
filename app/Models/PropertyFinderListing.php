@@ -11,9 +11,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
+use App\Traits\Auditable;
+
 class PropertyFinderListing extends Model
 {
-    use HasFactory, SoftDeletes, HasUuids;
+    use HasFactory, SoftDeletes, HasUuids, Auditable;
 
     protected $table = 'listings';
 

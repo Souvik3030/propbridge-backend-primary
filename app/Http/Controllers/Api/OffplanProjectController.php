@@ -11,6 +11,7 @@ use App\Http\Resources\ProjectResource;
 use App\Models\OffplanProject;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class OffplanProjectController extends Controller
 {
@@ -25,21 +26,24 @@ class OffplanProjectController extends Controller
         $filters   = $request->isMethod('POST') ? $request->all() : $request->query();
         $paginated = $action->execute($filters);
 
-        return response()->json([
-            'data'  => ProjectResource::collection($paginated->items()),
-            'meta'  => [
-                'current_page' => $paginated->currentPage(),
-                'per_page'     => $paginated->perPage(),
-                'total'        => $paginated->total(),
-                'last_page'    => $paginated->lastPage(),
-                'from'         => $paginated->firstItem(),
-                'to'           => $paginated->lastItem(),
-            ],
-            'links' => [
-                'prev' => $paginated->previousPageUrl(),
-                'next' => $paginated->nextPageUrl(),
-            ],
-        ]);
+        return $this->paginatedProjectResponse($paginated);
+    }
+
+    /**
+     * GET /api/v1/projects/all
+     *
+     * Frontend-friendly paginated project list from the local database.
+     */
+    public function all(Request $request): JsonResponse
+    {
+        $perPage = min(max((int) $request->query('per_page', 20), 1), 100);
+        $page = max((int) $request->query('page', 1), 1);
+
+        $paginated = OffplanProject::with(['location', 'developer', 'images'])
+            ->latest()
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        return $this->paginatedProjectResponse($paginated);
     }
 
     /**
@@ -105,6 +109,27 @@ class OffplanProjectController extends Controller
 
         return response()->json([
             'results' => ProjectLocationResource::collection($locations),
+        ]);
+    }
+
+    private function paginatedProjectResponse(LengthAwarePaginator $paginated): JsonResponse
+    {
+        return response()->json([
+            'data' => ProjectResource::collection($paginated->getCollection()),
+            'meta' => [
+                'current_page' => $paginated->currentPage(),
+                'per_page' => $paginated->perPage(),
+                'total' => $paginated->total(),
+                'last_page' => $paginated->lastPage(),
+                'from' => $paginated->firstItem(),
+                'to' => $paginated->lastItem(),
+            ],
+            'links' => [
+                'first' => $paginated->url(1),
+                'last' => $paginated->url($paginated->lastPage()),
+                'prev' => $paginated->previousPageUrl(),
+                'next' => $paginated->nextPageUrl(),
+            ],
         ]);
     }
 }

@@ -40,4 +40,9 @@ return [
         'host' => env('BAYUT_OFFPLAN_API_HOST'),
     ],
 
+    'uae_real_estate' => [
+        'key' => env('UAE_REAL_ESTATE_API_KEY', env('BAYUT_OFFPLAN_API_KEY')),
+        'host' => env('UAE_REAL_ESTATE_API_HOST', env('BAYUT_OFFPLAN_API_HOST', 'uae-real-estate2.p.rapidapi.com')),
+    ],
+
 ];

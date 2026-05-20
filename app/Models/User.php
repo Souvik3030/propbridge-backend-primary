@@ -12,9 +12,11 @@ use App\Traits\Tenantable;
 use App\Models\Company;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 
+use App\Traits\Auditable;
+
 class User extends Authenticatable
 {
-    use HasApiTokens, Notifiable, HasRoles, HasUuids, Tenantable; 
+    use HasApiTokens, Notifiable, HasRoles, HasUuids, Tenantable, Auditable; 
 
     protected $fillable = [
         'company_id', 

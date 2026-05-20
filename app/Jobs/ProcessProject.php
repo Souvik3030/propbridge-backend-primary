@@ -14,6 +14,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Support\Carbon;
 
 class ProcessProject implements ShouldQueue
 {
@@ -129,30 +130,47 @@ class ProcessProject implements ShouldQueue
             // ── 9. Upsert Project ─────────────────────────────────────────────────
             $project = OffplanProject::updateOrCreate(
                 [
-                    'source'    => 'bayut',
+                    'source'    => $this->projectData['_source'] ?? 'bayut',
                     'source_id' => (string) ($this->projectData['id'] ?? $this->projectData['externalID'] ?? $this->projectData['referenceNumber'] ?? ''),
                 ],
                 [
                     'location_id'      => $location->id,
                     'developer_id'     => $developerId,
+                    'reference_number' => $this->projectData['reference_number'] ?? null,
                     'title'            => $this->projectData['name'] ?? $this->projectData['title'] ?? 'Untitled Project',
+                    'title_ar'         => $this->projectData['title_ar'] ?? null,
                     'description'      => $this->projectData['description'] ?? null,
                     'price'            => $priceMin,
                     'price_max'        => $priceMax,
                     'area_min'         => $areaMin,
                     'area_max'         => $areaMax,
                     'area_built_up'    => $areaBuiltUp,
+                    'area_unit'        => $areaData['unit'] ?? null,
                     'bedrooms'         => $bedrooms,
+                    'bathrooms'        => $this->projectData['bathrooms'] ?? null,
+                    'is_furnished'     => $this->projectData['is_furnished'] ?? null,
                     'rooms'            => $roomsArr,
                     'units_count'      => (int) $unitsCount,
                     'purpose'          => $this->projectData['purpose'] ?? null,
                     'type_main'        => $typeMain,
                     'type_sub'         => $typeSub,
                     'completion_status' => $completionStatus,
-                    'completion_date'  => $completionDate,
+                    'completion_date'  => $this->parseDate($completionDate),
+                    'permit_number'    => $this->projectData['permit_number'] ?? null,
+                    'bayut_url'        => $this->projectData['bayut_url'] ?? null,
                     'amenities'        => $this->projectData['amenities'] ?? [],
+                    'keywords'         => $this->projectData['keywords'] ?? [],
+                    'amenities_ar'     => $this->projectData['amenities_ar'] ?? [],
+                    'keywords_ar'      => $this->projectData['keywords_ar'] ?? [],
                     'payment_plans'    => $this->projectData['payment_plan'] ?? $this->projectData['payment_plans'] ?? [],
                     'documents'        => $this->projectData['documents'] ?? [],
+                    'agency_payload'   => $this->projectData['agency_payload'] ?? null,
+                    'agent_payload'    => $this->projectData['agent_payload'] ?? null,
+                    'verification_payload' => $this->projectData['verification_payload'] ?? null,
+                    'legal_payload'    => $this->projectData['legal_payload'] ?? null,
+                    'offplan_payload'  => $this->projectData['offplan_payload'] ?? null,
+                    'raw_payload'      => $this->projectData['raw_payload'] ?? null,
+                    'investment_score' => $this->projectData['investment_score'] ?? null,
                 ]
             );
 
@@ -208,5 +226,26 @@ class ProcessProject implements ShouldQueue
     public function middleware(): array
     {
         return [new RateLimited('bayut-db-writes')];
+    }
+
+    private function parseDate(mixed $value): ?string
+    {
+        if (!$value) {
+            return null;
+        }
+
+        foreach (['Y-m-d', 'd-m-Y', 'd/m/Y', 'm/d/Y'] as $format) {
+            try {
+                return Carbon::createFromFormat($format, (string) $value)->format('Y-m-d');
+            } catch (\Throwable) {
+                // Try the next known provider date format.
+            }
+        }
+
+        try {
+            return Carbon::parse((string) $value)->format('Y-m-d');
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

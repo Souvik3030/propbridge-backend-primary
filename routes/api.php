@@ -22,6 +22,15 @@ use App\Http\Controllers\Api\PropertyFinderListingController;
 use App\Http\Controllers\Api\PermissionController;
 use App\Http\Controllers\Api\MarketAnalyticsController;
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\OpsComplianceController;
+use App\Http\Controllers\Api\OpsAlertsController;
+use App\Http\Controllers\Api\OpsAutomationController;
+use App\Http\Controllers\Api\OpsAgentPerformanceController;
+use App\Http\Controllers\Api\OpsPortalHealthController;
+use App\Http\Controllers\Api\OpsAuditLogsController;
+use App\Http\Controllers\Api\AdminUserController;
+use App\Http\Controllers\Api\InvestmentToolsController;
+use App\Http\Controllers\Api\OffplanDeveloperController;
 // --- MIDDLEWARE ---
 use App\Http\Middleware\CheckCompanyStatus;
 use Illuminate\Session\Middleware\StartSession;
@@ -44,6 +53,7 @@ Route::prefix('v1')->group(function () {
     Route::prefix('projects')->group(function () {
         Route::get('/',               [OffplanProjectController::class, 'search']);    // GET  /api/v1/projects
         Route::post('/search',        [OffplanProjectController::class, 'search']);    // POST /api/v1/projects/search
+        Route::get('/all',            [OffplanProjectController::class, 'all']);       // GET  /api/v1/projects/all
         Route::get('/filter-options', [OffplanProjectController::class, 'filterOptions']); // GET /api/v1/projects/filter-options
         Route::get('/locations',      [OffplanProjectController::class, 'locations']); // GET  /api/v1/projects/locations
         Route::get('/{id}',           [OffplanProjectController::class, 'show']);      // GET  /api/v1/projects/{id}
@@ -52,6 +62,7 @@ Route::prefix('v1')->group(function () {
     // ── Developers ───────────────────────────────────────────────────────
     Route::prefix('developers')->group(function () {
         Route::get('/',      [DeveloperController::class, 'index']); // GET /api/v1/developers
+        Route::get('/all',   [DeveloperController::class, 'all']);    // GET /api/v1/developers/all
         Route::get('/{id}',  [DeveloperController::class, 'show']);  // GET /api/v1/developers/{id}
     });
 
@@ -70,6 +81,37 @@ Route::prefix('v1')->group(function () {
     // ── Market Page Analytics ─────────────────────────────────────────────
     Route::get('/market-analytics', [MarketAnalyticsController::class, 'getAnalytics']);
     Route::get('/market-analytics/export', [MarketAnalyticsController::class, 'export']);
+
+    Route::middleware([StartSession::class, 'auth:sanctum', CheckCompanyStatus::class])->group(function () {
+        Route::get('/dashboard', [DashboardController::class, 'index']); // GET /api/v1/dashboard
+
+        Route::prefix('ops')->group(function () {
+            Route::get('/compliance', [OpsComplianceController::class, 'index']); // GET /api/v1/ops/compliance
+            Route::get('/alerts', [OpsAlertsController::class, 'index']); // GET /api/v1/ops/alerts
+            Route::get('/automation', [OpsAutomationController::class, 'index']); // GET /api/v1/ops/automation
+            Route::post('/automation/trigger', [OpsAutomationController::class, 'trigger']); // POST /api/v1/ops/automation/trigger
+            Route::get('/agent-performance', [OpsAgentPerformanceController::class, 'index']); // GET /api/v1/ops/agent-performance
+            Route::get('/portal-health', [OpsPortalHealthController::class, 'index']); // GET /api/v1/ops/portal-health
+            Route::get('/audit-logs', [OpsAuditLogsController::class, 'index']); // GET /api/v1/ops/audit-logs
+            Route::get('/audit-logs/export', [OpsAuditLogsController::class, 'export']); // GET /api/v1/ops/audit-logs/export
+        });
+
+        Route::prefix('admin')->group(function () {
+            Route::get('/users', [AdminUserController::class, 'index']); // GET /api/v1/admin/users
+            Route::post('/users/{id}/impersonate', [AdminUserController::class, 'impersonate']); // POST /api/v1/admin/users/{id}/impersonate
+            Route::delete('/users/{id}', [AdminUserController::class, 'destroy']); // DELETE /api/v1/admin/users/{id}
+        });
+
+        Route::prefix('tools')->group(function () {
+            Route::get('/area-comparison', [InvestmentToolsController::class, 'areaComparison']); // GET /api/v1/tools/area-comparison
+            Route::get('/mortgage-benchmarks', [InvestmentToolsController::class, 'mortgageBenchmarks']); // GET /api/v1/tools/mortgage-benchmarks
+            Route::get('/rental-yields', [InvestmentToolsController::class, 'rentalYields']); // GET /api/v1/tools/rental-yields
+        });
+
+        Route::prefix('developers')->group(function () {
+            Route::get('/{id}/projects', [OffplanDeveloperController::class, 'projects']); // GET /api/v1/developers/{id}/projects
+        });
+    });
 });
 
 Route::get('/load-test-companies', function () {
