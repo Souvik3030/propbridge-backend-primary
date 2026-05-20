@@ -15,12 +15,8 @@ class DldAnalyticsController extends Controller
      */
     public function getAnalytics(Request $request)
     {
-        $startDate = $request->input('start_date', Carbon::now()->subDays(30)->toDateString());
-        $endDate = $request->input('end_date', Carbon::now()->toDateString());
-
         // 1. Overview Stats
             $stats = DB::table('dld_transactions')
-                ->whereBetween('instance_date', [$startDate, $endDate])
                 ->selectRaw("
                     COUNT(*) as totalTransactions,
                     COUNT(CASE WHEN group_en = 'Sales' THEN 1 END) as sales,
@@ -56,7 +52,6 @@ class DldAnalyticsController extends Controller
             $priceDistributionRaw = DB::table('dld_transactions')
                 ->where('is_offplan_en', 'Off-Plan')
                 ->where('group_en', 'Sales')
-                ->whereBetween('instance_date', [$startDate, $endDate])
                 ->selectRaw("
                     CASE 
                         WHEN trans_value < 1000000 THEN '<1M'
@@ -84,7 +79,6 @@ class DldAnalyticsController extends Controller
             $roomDemandRaw = DB::table('dld_transactions')
                 ->where('is_offplan_en', 'Off-Plan')
                 ->where('group_en', 'Sales')
-                ->whereBetween('instance_date', [$startDate, $endDate])
                 ->selectRaw("
                     COALESCE(rooms_en, 'Unknown') as room,
                     COUNT(*) as count
@@ -102,7 +96,6 @@ class DldAnalyticsController extends Controller
 
             // 4. Top 20 Areas by Sales Volume
             $topAreasRaw = DB::table('dld_transactions')
-                ->whereBetween('instance_date', [$startDate, $endDate])
                 ->selectRaw("
                     area_en as area,
                     COUNT(CASE WHEN group_en = 'Sales' THEN 1 END) as sales,
@@ -117,11 +110,10 @@ class DldAnalyticsController extends Controller
                 ->limit(20)
                 ->get();
 
-            $topAreas = $topAreasRaw->map(function ($area, $index) use ($startDate, $endDate) {
+            $topAreas = $topAreasRaw->map(function ($area, $index) {
                 // Find top room for this area (ignoring nulls)
                 $topRoom = DB::table('dld_transactions')
                     ->where('area_en', $area->area)
-                    ->whereBetween('instance_date', [$startDate, $endDate])
                     ->whereNotNull('rooms_en')
                     ->where('rooms_en', '!=', '')
                     ->select('rooms_en')
