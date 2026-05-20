@@ -96,6 +96,9 @@ Route::prefix('v1')->group(function () {
             Route::get('/portal-health', [OpsPortalHealthController::class, 'index']); // GET /api/v1/ops/portal-health
             Route::get('/audit-logs', [OpsAuditLogsController::class, 'index']); // GET /api/v1/ops/audit-logs
             Route::get('/audit-logs/export', [OpsAuditLogsController::class, 'export']); // GET /api/v1/ops/audit-logs/export
+            
+            // DLD Data Imports (Developers, Projects, Transactions)
+            Route::post('/imports/dld', [\App\Http\Controllers\Api\V1\DldImportController::class, 'upload']);
         });
 
         Route::prefix('admin')->group(function () {
