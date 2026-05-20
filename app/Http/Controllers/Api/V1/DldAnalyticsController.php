@@ -18,12 +18,7 @@ class DldAnalyticsController extends Controller
         $startDate = $request->input('start_date', Carbon::now()->subDays(30)->toDateString());
         $endDate = $request->input('end_date', Carbon::now()->toDateString());
 
-        // Cache key based on date range
-        $cacheKey = "dld_analytics_{$startDate}_{$endDate}";
-        $ttl = 60 * 60 * 12; // 12 hours caching
-
-        $data = Cache::remember($cacheKey, $ttl, function () use ($startDate, $endDate) {
-            // 1. Overview Stats
+        // 1. Overview Stats
             $stats = DB::table('dld_transactions')
                 ->whereBetween('instance_date', [$startDate, $endDate])
                 ->selectRaw("
@@ -146,13 +141,12 @@ class DldAnalyticsController extends Controller
                 ];
             });
 
-            return [
-                'stats' => $stats,
-                'priceDistribution' => $priceDistribution,
-                'roomDemand' => $roomDemand,
-                'topAreas' => $topAreas
-            ];
-        });
+        $data = [
+            'stats' => $stats,
+            'priceDistribution' => $priceDistribution,
+            'roomDemand' => $roomDemand,
+            'topAreas' => $topAreas
+        ];
 
         return response()->json([
             'success' => true,

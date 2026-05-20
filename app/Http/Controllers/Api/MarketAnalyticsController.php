@@ -24,10 +24,7 @@ class MarketAnalyticsController extends Controller
         $area = $request->query('area');
         $status = $request->query('status'); // All, Off-Plan, Ready
 
-        $cacheKey = "market-analytics:v1:" . md5(serialize([$area, $status]));
-
-        $analytics = Cache::remember($cacheKey, self::CACHE_TTL, function () use ($area, $status) {
-            $baseQuery = DB::table('dld_transactions');
+        $baseQuery = DB::table('dld_transactions');
 
             // Apply Filters
             if (!empty($area)) {
@@ -57,14 +54,13 @@ class MarketAnalyticsController extends Controller
             // ── 5. Area Comparison Metrics ───────────────────────────────────
             $areaComparisonMetrics = $this->computeAreaComparisonMetrics($topAreas, clone $baseQuery);
 
-            return [
-                'summaryStats'          => $summaryStats,
-                'topAreas'              => $topAreas,
-                'priceDistribution'     => $priceDistribution,
-                'bedroomDemand'         => $bedroomDemand,
-                'areaComparisonMetrics' => $areaComparisonMetrics,
-            ];
-        });
+        $analytics = [
+            'summaryStats'          => $summaryStats,
+            'topAreas'              => $topAreas,
+            'priceDistribution'     => $priceDistribution,
+            'bedroomDemand'         => $bedroomDemand,
+            'areaComparisonMetrics' => $areaComparisonMetrics,
+        ];
 
         return response()->json([
             'success' => true,
