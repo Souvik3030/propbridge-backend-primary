@@ -84,6 +84,13 @@ Route::prefix('v1')->group(function () {
     Route::get('/market-analytics', [MarketAnalyticsController::class, 'getAnalytics']);
     Route::get('/market-analytics/export', [MarketAnalyticsController::class, 'export']);
 
+    // ── Investment Tools ─────────────────────────────────────────────────
+    Route::prefix('tools')->group(function () {
+        Route::get('/area-comparison', [InvestmentToolsController::class, 'areaComparison']); // GET /api/v1/tools/area-comparison
+        Route::get('/mortgage-benchmarks', [InvestmentToolsController::class, 'mortgageBenchmarks']); // GET /api/v1/tools/mortgage-benchmarks
+        Route::get('/rental-yields', [InvestmentToolsController::class, 'rentalYields']); // GET /api/v1/tools/rental-yields
+    });
+
     Route::middleware([StartSession::class, 'auth:sanctum', CheckCompanyStatus::class])->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index']); // GET /api/v1/dashboard
 
@@ -105,12 +112,6 @@ Route::prefix('v1')->group(function () {
             Route::get('/users', [AdminUserController::class, 'index']); // GET /api/v1/admin/users
             Route::post('/users/{id}/impersonate', [AdminUserController::class, 'impersonate']); // POST /api/v1/admin/users/{id}/impersonate
             Route::delete('/users/{id}', [AdminUserController::class, 'destroy']); // DELETE /api/v1/admin/users/{id}
-        });
-
-        Route::prefix('tools')->group(function () {
-            Route::get('/area-comparison', [InvestmentToolsController::class, 'areaComparison']); // GET /api/v1/tools/area-comparison
-            Route::get('/mortgage-benchmarks', [InvestmentToolsController::class, 'mortgageBenchmarks']); // GET /api/v1/tools/mortgage-benchmarks
-            Route::get('/rental-yields', [InvestmentToolsController::class, 'rentalYields']); // GET /api/v1/tools/rental-yields
         });
 
         Route::prefix('developers')->group(function () {
