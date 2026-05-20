@@ -57,6 +57,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/filter-options', [OffplanProjectController::class, 'filterOptions']); // GET /api/v1/projects/filter-options
         Route::get('/locations',      [OffplanProjectController::class, 'locations']); // GET  /api/v1/projects/locations
         Route::get('/{id}',           [OffplanProjectController::class, 'show']);      // GET  /api/v1/projects/{id}
+        Route::get('/{id}/escrow-tracking', [\App\Http\Controllers\Api\ProjectEscrowController::class, 'show']); // GET /api/v1/projects/{id}/escrow-tracking
     });
 
     // ── Developers ───────────────────────────────────────────────────────
@@ -91,6 +92,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/rental-yields', [InvestmentToolsController::class, 'rentalYields']); // GET /api/v1/tools/rental-yields
     });
 
+    Route::prefix('investment')->group(function () {
+        Route::get('/area-comparison', [InvestmentToolsController::class, 'areaComparison']); // GET /api/v1/investment/area-comparison
+    });
+
     Route::middleware([StartSession::class, 'auth:sanctum', CheckCompanyStatus::class])->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'index']); // GET /api/v1/dashboard
 
@@ -116,6 +121,11 @@ Route::prefix('v1')->group(function () {
 
         Route::prefix('developers')->group(function () {
             Route::get('/{id}/projects', [OffplanDeveloperController::class, 'projects']); // GET /api/v1/developers/{id}/projects
+        });
+
+        Route::prefix('projects')->group(function () {
+            Route::get('/{id}/notes', [\App\Http\Controllers\Api\ProjectNoteController::class, 'index']); // GET /api/v1/projects/{id}/notes
+            Route::post('/{id}/notes', [\App\Http\Controllers\Api\ProjectNoteController::class, 'store']); // POST /api/v1/projects/{id}/notes
         });
     });
 });

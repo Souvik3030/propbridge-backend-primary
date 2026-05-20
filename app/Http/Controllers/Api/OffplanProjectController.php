@@ -95,6 +95,7 @@ class OffplanProjectController extends Controller
             ->firstOrFail();
 
         return response()->json([
+            'success' => true,
             'data' => new ProjectResource($project),
         ]);
     }
@@ -115,11 +116,13 @@ class OffplanProjectController extends Controller
     private function paginatedProjectResponse(LengthAwarePaginator $paginated): JsonResponse
     {
         return response()->json([
-            'data' => ProjectResource::collection($paginated->getCollection()),
+            'success' => true,
+            'results' => ProjectResource::collection($paginated->getCollection()),
             'meta' => [
                 'current_page' => $paginated->currentPage(),
                 'per_page' => $paginated->perPage(),
                 'total' => $paginated->total(),
+                'total_pages' => $paginated->lastPage(),
                 'last_page' => $paginated->lastPage(),
                 'from' => $paginated->firstItem(),
                 'to' => $paginated->lastItem(),
