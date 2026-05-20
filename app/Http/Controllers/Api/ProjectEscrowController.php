@@ -11,12 +11,35 @@ class ProjectEscrowController extends Controller
 {
     public function show(string $id)
     {
-        $project = OffplanProject::findOrFail($id);
+        $project = OffplanProject::where('id', $id)
+            ->orWhere('source_id', $id)
+            ->firstOrFail();
 
-        // Clean the title for better matching, e.g., removing "by Developer" or extra spaces.
-        $title = trim($project->title);
+        // Clean the title for better matching.
+        $title = trim($project->title ?? '');
+        
+        if (empty($title)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Escrow details not found for this project (Missing title).'
+            ], 404);
+        }
 
-        $dldProject = DldActiveProject::where('project_name', 'like', "%{$title}%")->first();
+        // Remove "by DeveloperName" or similar suffixes
+        $cleanTitle = preg_replace('/\s+by\s+.*/i', '', $title);
+        $cleanTitle = trim($cleanTitle);
+
+        // Try exact match first
+        $dldProject = DldActiveProject::where('project_name', 'like', "%{$cleanTitle}%")->first();
+
+        // If not found, try a looser match with the first 2 words
+        if (!$dldProject) {
+            $words = explode(' ', $cleanTitle);
+            if (count($words) >= 2) {
+                $looseTitle = $words[0] . ' ' . $words[1];
+                $dldProject = DldActiveProject::where('project_name', 'like', "%{$looseTitle}%")->first();
+            }
+        }
 
         if (!$dldProject) {
             return response()->json([
