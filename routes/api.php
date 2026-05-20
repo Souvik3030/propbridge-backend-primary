@@ -68,6 +68,7 @@ Route::prefix('v1')->group(function () {
 
     // ── Market Intelligence / Analytics ───────────────────────────────────
     Route::prefix('analytics')->group(function () {
+        Route::get('/hot-areas-deals',        [\App\Http\Controllers\Api\V1\HotAreasDealsController::class, 'index']);
         Route::get('/dld',                    [\App\Http\Controllers\Api\V1\DldAnalyticsController::class, 'getAnalytics']);
         Route::get('/market-summary',         [MarketIntelligenceController::class, 'marketSummary']);
         Route::get('/distributions',          [MarketIntelligenceController::class, 'distributions']);

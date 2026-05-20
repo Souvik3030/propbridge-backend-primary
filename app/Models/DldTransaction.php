@@ -32,5 +32,11 @@ class DldTransaction extends Model
         'total_seller',
         'master_project_en',
         'project_en',
+        'project_id',
     ];
+
+    public function activeProject()
+    {
+        return $this->belongsTo(DldActiveProject::class, 'project_id');
+    }
 }
